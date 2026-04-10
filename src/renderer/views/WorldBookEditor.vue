@@ -196,10 +196,10 @@
             <input type="number" class="wb-order-input"
               :value="entry.extensions.cfSortKey"
               @click.stop
-              @input="updateOrder(entry, $event.target.value)"
+              @mousedown.stop
+              @change="updateOrder(entry, $event.target.value)"
               title="显示序号 — 仅 CardForge 内部排序，不影响 insertion_order">
             <span class="wb-entry__expand">{{ expandedIds.has(entry.id) ? '▼' : '▶' }}</span>
-            <span class="wb-entry__id">#{{ entry.id }}</span>
             <span class="wb-entry__name">{{ entry.comment || '(未命名)' }}</span>
             <span v-if="entry.constant && entry.enabled" class="badge badge--warning">常驻</span>
             <span v-if="!entry.enabled" class="badge badge--danger">禁用</span>
@@ -389,6 +389,7 @@ import { useCardStore } from '../stores/card.js';
 import { useApiStore } from '../stores/api.js';
 import { useAppStore } from '../stores/app.js';
 import { buildCardContext } from '../utils/card-context.js';
+import { chatForJsonArray } from '../utils/json-repair.js';
 
 const store = useCardStore();
 const apiStore = useApiStore();
@@ -494,15 +495,10 @@ ${aiExtraReq.value ? `- 额外要求：${aiExtraReq.value}` : ''}
 
 只输出JSON数组，不要其他文字。`;
 
-    const result = await apiStore.chat([
+    const parsed = await chatForJsonArray(apiStore, [
       { role: 'system', content: '你是SillyTavern世界书架构专家。精通世界书条目的分类、关键词设计、insertion_order分层策略。始终输出合法JSON。' },
       { role: 'user', content: prompt }
-    ], { temperature: 0.7, maxTokens: ['large', 'massive', 'extreme'].includes(aiTargetCount.value) ? 16384 : 8192 });
-
-    const jsonMatch = result.match(/\[[\s\S]*\]/);
-    if (!jsonMatch) throw new Error('AI 返回格式异常，请重试');
-
-    const parsed = JSON.parse(jsonMatch[0]);
+    ], { temperature: 0.7, maxTokens: apiStore.getModelMaxTokens(apiStore.activeProvider?.model) });
     aiResults.value = parsed.map(item => ({
       ...item,
       selected: true,
@@ -539,14 +535,10 @@ ${aiWorldDesc.value}
 请生成更多未覆盖的条目（NPC、地点、事件等），不要重复已有的。
 输出JSON数组格式，同之前。只输出JSON。`;
 
-    const result = await apiStore.chat([
+    const newItems = (await chatForJsonArray(apiStore, [
       { role: 'system', content: '你是世界书架构专家。继续补充条目，不要重复。只输出JSON。' },
       { role: 'user', content: prompt }
-    ], { temperature: 0.7, maxTokens: 8192 });
-
-    const match = result.match(/\[[\s\S]*\]/);
-    if (!match) throw new Error('格式异常');
-    const newItems = JSON.parse(match[0]).map(item => ({
+    ], { temperature: 0.7, maxTokens: apiStore.getModelMaxTokens(apiStore.activeProvider?.model) })).map(item => ({
       ...item, selected: true,
       keys: item.keys || [], constant: item.constant ?? false,
       position: item.position || 'before_char', insertion_order: item.insertion_order || 100
@@ -627,14 +619,25 @@ function toggleExpand(id) {
   else expandedIds.value.add(id);
 }
 
-// 排序：数字框（只改 cfSortKey，不动 insertion_order 也不动 ST 的 display_index）
+// 排序：数字框 — 插入到目标位置，其他条目自动重新编号
 function updateOrder(entry, val) {
   const num = Number(val);
-  if (Number.isFinite(num)) {
-    if (!entry.extensions) entry.extensions = {};
-    entry.extensions.cfSortKey = num;
-    store.markDirty();
+  if (!Number.isFinite(num) || num < 1) return;
+
+  // 取当前可见列表（已排序）
+  const sorted = filteredEntries.value.slice();
+  // 从列表中移除当前条目
+  const idx = sorted.findIndex(e => e.id === entry.id);
+  if (idx !== -1) sorted.splice(idx, 1);
+  // 插入到目标位置（num-1 因为用户输入从 1 开始）
+  const insertAt = Math.min(num - 1, sorted.length);
+  sorted.splice(insertAt, 0, entry);
+  // 重新分配 cfSortKey
+  for (let i = 0; i < sorted.length; i++) {
+    if (!sorted[i].extensions) sorted[i].extensions = {};
+    sorted[i].extensions.cfSortKey = i + 1;
   }
+  store.markDirty();
 }
 
 // 排序：拖拽
@@ -922,6 +925,10 @@ function syncPosition(entry) {
   text-align: center;
   &:hover { border-color: var(--cf-border-light); }
   &:focus { border-color: rgba(255, 215, 0, 0.5); outline: none; }
+  /* 隐藏 number input 的上下箭头 */
+  -moz-appearance: textfield;
+  &::-webkit-inner-spin-button,
+  &::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
 }
 .wb-entry--dragging {
   opacity: 0.4;

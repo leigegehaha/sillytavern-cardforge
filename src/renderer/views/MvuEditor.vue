@@ -237,6 +237,7 @@ import { useCardStore } from '../stores/card.js';
 import { useApiStore } from '../stores/api.js';
 import { useAppStore } from '../stores/app.js';
 import { buildCardContext } from '../utils/card-context.js';
+import { chatForJsonArray } from '../utils/json-repair.js';
 
 const cardStore = useCardStore();
 const apiStore = useApiStore();
@@ -573,14 +574,10 @@ type 可选：number / string / boolean / enum（需填 enumValues 逗号分隔�
 
 只输出 JSON 数组。`;
 
-    const result = await apiStore.chat([
+    const groups = await chatForJsonArray(apiStore, [
       { role: 'system', content: '你是变量系统设计专家。只输出合法JSON数组。' },
       { role: 'user', content: prompt }
     ], { temperature: 0.7, maxTokens: 4096 });
-
-    const match = result.match(/\[[\s\S]*\]/);
-    if (!match) throw new Error('AI 返回格式异常');
-    const groups = JSON.parse(match[0]);
 
     varGroups.length = 0;
     for (const g of groups) {
@@ -645,7 +642,8 @@ function generateAndInject() {
   ruleEntry.constant = true;
   ruleEntry.enabled = true;
   ruleEntry.position = 'after_char';
-  ruleEntry.insertion_order = 9995;
+  ruleEntry.insertion_order = 200;
+  ruleEntry.extensions.depth = 0;
 
   // 5. 生成变量注入条目
   const prefix = namingPrefix.value === 'mvu' ? '[mvu_update]' : namingPrefix.value === 'bracket' ? '【变量】' : '';
@@ -654,7 +652,7 @@ function generateAndInject() {
 
   if (injectMode.value === 'split') {
     // 按分组拆分注入
-    let orderBase = 9980;
+    let orderBase = 190;
     for (const group of varGroups) {
       if (!group.name) continue;
       const ve = cardStore.addWorldEntry();
@@ -664,6 +662,7 @@ function generateAndInject() {
       ve.enabled = true;
       ve.position = 'after_char';
       ve.insertion_order = orderBase++;
+      ve.extensions.depth = 0;
       // NPC分组用关键词触发
       if (!ve.constant) {
         ve.keys = [group.name];
@@ -677,7 +676,8 @@ function generateAndInject() {
     varEntry.constant = true;
     varEntry.enabled = true;
     varEntry.position = 'after_char';
-    varEntry.insertion_order = 9990;
+    varEntry.insertion_order = 200;
+    varEntry.extensions.depth = 0;
   }
 
   // 6. 生成变量输出格式条目（常驻，告诉AI用什么格式输出变量更新）
@@ -686,7 +686,8 @@ function generateAndInject() {
   fmtEntry.constant = true;
   fmtEntry.enabled = true;
   fmtEntry.position = 'after_char';
-  fmtEntry.insertion_order = 9998;
+  fmtEntry.insertion_order = 200;
+  fmtEntry.extensions.depth = 0;
   if (updateFormat.value === 'lodash') {
     fmtEntry.content = '---\n变量输出格式:\n  rule:\n    - you must output the update analysis and the actual update commands at once in <UpdateVariable> tag\n    - use lodash _.set format\n  format: |\n    <UpdateVariable>\n    _.set(\'路径\', 旧值, 新值);\n    </UpdateVariable>\n---';
   } else {
@@ -700,7 +701,8 @@ function generateAndInject() {
   emphEntry.constant = true;
   emphEntry.enabled = true;
   emphEntry.position = 'after_char';
-  emphEntry.insertion_order = 9999;
+  emphEntry.insertion_order = 200;
+  emphEntry.extensions.depth = 0;
 
   // 8. 自动配套正则脚本（完整6个）
   const regexPairs = [

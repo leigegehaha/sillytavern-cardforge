@@ -153,6 +153,7 @@ import { useCardStore } from '../stores/card.js';
 import { useApiStore } from '../stores/api.js';
 import { useAppStore } from '../stores/app.js';
 import { buildCardContext } from '../utils/card-context.js';
+import { chatForJsonArray } from '../utils/json-repair.js';
 
 const store = useCardStore();
 const apiStore = useApiStore();
@@ -234,14 +235,10 @@ ${context}
 
 只输出真正需要的脚本，不要重复已有的。只输出JSON。`;
 
-    const result = await apiStore.chat([
+    const generated = await chatForJsonArray(apiStore, [
       { role: 'system', content: '你是正则脚本专家。只输出合法JSON数组。' },
       { role: 'user', content: prompt }
     ], { temperature: 0.7, maxTokens: 4096 });
-
-    const match = result.match(/\[[\s\S]*\]/);
-    if (!match) throw new Error('AI返回格式异常');
-    const generated = JSON.parse(match[0]);
     for (const s of generated) {
       store.addRegexScript({
         ...store.createEmptyRegexScript(),

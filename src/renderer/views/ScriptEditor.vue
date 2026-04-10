@@ -101,6 +101,7 @@ import { useCardStore } from '../stores/card.js';
 import { useApiStore } from '../stores/api.js';
 import { useAppStore } from '../stores/app.js';
 import { buildCardContext } from '../utils/card-context.js';
+import { chatForJsonArray } from '../utils/json-repair.js';
 
 const store = useCardStore();
 const apiStore = useApiStore();
@@ -135,15 +136,10 @@ ${context}
 
 只生成真正需要的脚本。只输出JSON。`;
 
-    const result = await apiStore.chat([
+    const scripts = await chatForJsonArray(apiStore, [
       { role: 'system', content: '你是酒馆助手脚本专家。只输出合法JSON数组。' },
       { role: 'user', content: prompt }
     ], { temperature: 0.7, maxTokens: 4096 });
-
-    let code = result;
-    const codeMatch = result.match(/\[[\s\S]*\]/);
-    if (!codeMatch) throw new Error('AI返回格式异常');
-    const scripts = JSON.parse(codeMatch[0]);
     for (const s of scripts) {
       store.addTavernScript({
         ...store.createEmptyTavernScript(),

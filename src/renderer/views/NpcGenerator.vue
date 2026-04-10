@@ -178,6 +178,7 @@ import { useCardStore } from '../stores/card.js';
 import { useApiStore } from '../stores/api.js';
 import { useAppStore } from '../stores/app.js';
 import { buildCardContext } from '../utils/card-context.js';
+import { chatForJsonArray } from '../utils/json-repair.js';
 
 const cardStore = useCardStore();
 const apiStore = useApiStore();
@@ -269,15 +270,10 @@ ${buildStyleInstruction()}
 
 只输出JSON，不要其他文字。`;
 
-    const result = await apiStore.chat([
+    const npcs = await chatForJsonArray(apiStore, [
       { role: 'system', content: '你是一个角色创作专家，擅长为SillyTavern创建有深度的NPC角色。始终输出合法的JSON格式。' },
       { role: 'user', content: prompt }
     ], { temperature: 0.9 });
-
-    // Parse JSON from response
-    const jsonMatch = result.match(/\[[\s\S]*\]/);
-    if (!jsonMatch) throw new Error('AI 返回格式异常，请重试');
-    const npcs = JSON.parse(jsonMatch[0]);
     generatedNpcs.value = npcs.map(n => ({ ...n, selected: true }));
     appStore.toastSuccess(`成功生成 ${npcs.length} 个NPC`);
   } catch (e) {
@@ -330,14 +326,10 @@ ${buildStyleInstruction()}
 
 只输出JSON，不要其他文字。`;
 
-    const result = await apiStore.chat([
+    const npcs = await chatForJsonArray(apiStore, [
       { role: 'system', content: '你是一个角色创作专家。始终输出合法的JSON格式。' },
       { role: 'user', content: prompt }
     ], { temperature: 0.8 });
-
-    const jsonMatch = result.match(/\[[\s\S]*\]/);
-    if (!jsonMatch) throw new Error('AI 返回格式异常，请重试');
-    const npcs = JSON.parse(jsonMatch[0]);
     generatedNpcs.value = npcs.map(n => ({ ...n, selected: true }));
     appStore.toastSuccess('角色生成完成');
   } catch (e) {

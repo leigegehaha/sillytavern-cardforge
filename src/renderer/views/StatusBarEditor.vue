@@ -208,8 +208,9 @@ async function generateStatusBar() {
       '6. 等 MVU 加载后用 $("#st-panel").html(h) **完全覆盖**预填的示例数据 — 这点非常重要！',
       '7. refresh 函数遍历 getAllVariables().stat_data 动态生成 HTML（不要硬编码变量名，因为用户卡片结构可能不同）',
       '8. 用 eventOn(Mvu.events.VARIABLE_UPDATE_ENDED, refresh) 监听变量更新',
-      '9. 所有CSS用内联style或<style>标签，不引用外部资源',
-      '10. refresh 函数生成的 HTML 结构必须和示例数据的 HTML 结构一致（同样的CSS类、同样的布局），这样替换后样式不变',
+      '9. 所有CSS用内联style或<style>标签，可以引用Google Fonts等外部字体',
+      '10. CSS要精简高效，动画数量不限但总CSS控制在200行以内',
+      '11. refresh 函数生成的 HTML 结构必须和示例数据的 HTML 结构一致（同样的CSS类、同样的布局），这样替换后样式不变',
       '',
       '【完整参考结构】',
       '```html',
@@ -259,15 +260,18 @@ async function generateStatusBar() {
     const result = await apiStore.chat([
       { role: 'system', content: '你是前端开发专家，擅长生成精美的HTML状态栏。直接输出代码，不说明。' },
       { role: 'user', content: prompt }
-    ], { temperature: 0.8, maxTokens: 4096 });
+    ], { temperature: 0.8, maxTokens: apiStore.getModelMaxTokens(apiStore.activeProvider?.model) });
 
     let html = result.trim();
-    // 提取代码块（如果有）
-    const m = html.match(/```html?\s*([\s\S]*?)```/);
-    if (m) html = m[1].trim();
+    // 去掉所有 markdown 代码块标记（可能有多层）
+    html = html.replace(/```html?\s*/gi, '').replace(/```/g, '').trim();
     // 确保包含 <body>
     if (!html.includes('<body>')) {
       html = '<body>\n' + html + '\n</body>';
+    }
+    // 检查 HTML 是否被截断（缺少闭合标签）
+    if (!html.includes('</body>')) {
+      html += '\n</body>';
     }
     // 重新加上 ```html 包裹
     generatedHtml.value = '```html\n' + html + '\n```';
@@ -319,8 +323,30 @@ function onIframeLoad() {
   }, 100);
 }
 
+const statusBarScriptNames = ['前端状态栏渲染', '[隐藏]状态栏占位符', '[清理]旧楼层状态栏'];
+
+function hasExistingStatusBar() {
+  return cardStore.regexScripts.some(s => statusBarScriptNames.includes(s.scriptName));
+}
+
 function applyStatusBar() {
   if (!generatedHtml.value) return;
+
+  if (hasExistingStatusBar()) {
+    appStore.confirmAction('已存在状态栏正则脚本，是否替换？', () => doApplyStatusBar());
+  } else {
+    doApplyStatusBar();
+  }
+}
+
+function doApplyStatusBar() {
+  // 先删除已有的状态栏正则
+  const scripts = cardStore.regexScripts;
+  for (let i = scripts.length - 1; i >= 0; i--) {
+    if (statusBarScriptNames.includes(scripts[i].scriptName)) {
+      cardStore.removeRegexScript(scripts[i].id);
+    }
+  }
 
   // 1. 渲染正则
   cardStore.addRegexScript({

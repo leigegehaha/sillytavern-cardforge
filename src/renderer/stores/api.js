@@ -74,9 +74,29 @@ export const useApiStore = defineStore('api', () => {
     return _callProvider(provider, messages, options);
   }
 
+  function getModelMaxTokens(model) {
+    const m = (model || '').toLowerCase();
+    // Claude
+    if (m.includes('opus') || m.includes('sonnet-4') || m.includes('claude-4')) return 16384;
+    if (m.includes('claude-3-5') || m.includes('claude-3.5')) return 8192;
+    if (m.includes('claude')) return 4096;
+    // OpenAI
+    if (m.includes('gpt-4o') || m.includes('gpt-4-turbo') || m.includes('o1') || m.includes('o3') || m.includes('o4')) return 16384;
+    if (m.includes('gpt-4')) return 8192;
+    if (m.includes('gpt-3.5')) return 4096;
+    // Gemini
+    if (m.includes('gemini-2') || m.includes('gemini-1.5-pro')) return 8192;
+    if (m.includes('gemini')) return 8192;
+    // DeepSeek / Qwen 等中转常见模型
+    if (m.includes('deepseek')) return 8192;
+    if (m.includes('qwen')) return 8192;
+    return 4096;
+  }
+
   async function _callProvider(provider, messages, options) {
     const temperature = options.temperature ?? 0.8;
-    const maxTokens = options.maxTokens ?? 4096;
+    const modelMax = getModelMaxTokens(provider.model);
+    const maxTokens = Math.min(options.maxTokens ?? 4096, modelMax);
 
     if (provider.type === 'openai') {
       return callOpenAI(provider, messages, temperature, maxTokens);
@@ -281,7 +301,7 @@ export const useApiStore = defineStore('api', () => {
 
   return {
     providers, activeProviderId, activeProvider, isConfigured,
-    chat, chatWithProvider, loadFromDisk, saveToDisk, addProvider, removeProvider, initDefaults,
+    chat, chatWithProvider, getModelMaxTokens, loadFromDisk, saveToDisk, addProvider, removeProvider, initDefaults,
     setActiveProvider
   };
 });
