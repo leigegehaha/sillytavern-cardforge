@@ -1,0 +1,187 @@
+<template>
+  <div class="app-root">
+    <!-- 壁纸层 -->
+    <div class="wallpaper-layer" :style="wallpaperStyle"></div>
+    <!-- 蓝色星空滤镜层 -->
+    <div class="starfilter-layer"></div>
+    <!-- 星空粒子 -->
+    <div class="starfield">
+      <div v-for="star in stars" :key="star.id" class="starfield__star" :style="star.style"></div>
+    </div>
+
+    <!-- 自定义标题栏 -->
+    <div class="titlebar">
+      <div class="titlebar__title">角色卡锻造炉</div>
+      <div class="titlebar__controls">
+        <button class="titlebar__btn" @click="api.minimize()">─</button>
+        <button class="titlebar__btn" @click="api.maximize()">☐</button>
+        <button class="titlebar__btn titlebar__btn--close" @click="api.close()">✕</button>
+      </div>
+    </div>
+
+    <!-- 主布局 -->
+    <div class="app-layout">
+      <!-- 侧边栏 -->
+      <aside class="sidebar">
+        <div class="sidebar__logo">
+          <div class="sidebar__logo-text" style="font-size:15px">
+            角色卡锻造炉
+            <span class="sub">v1.0</span>
+          </div>
+        </div>
+
+        <nav class="sidebar__nav">
+          <div class="sidebar__section">
+            <div class="sidebar__section-title">总览</div>
+            <router-link to="/" class="sidebar__item" active-class="active" exact>
+              <span class="sidebar__item-icon">·</span> 工作台
+            </router-link>
+          </div>
+
+          <div class="sidebar__section">
+            <div class="sidebar__section-title">必填 · 做卡必须</div>
+            <router-link to="/basic" class="sidebar__item" active-class="active">
+              <span class="sidebar__item-icon">·</span> 基本信息
+            </router-link>
+            <router-link to="/charsetting" class="sidebar__item" active-class="active">
+              <span class="sidebar__item-icon">·</span> 角色设定
+            </router-link>
+            <router-link to="/worldbook" class="sidebar__item" active-class="active">
+              <span class="sidebar__item-icon">·</span> 世界书
+              <span class="badge badge--accent" v-if="cardStore.stats.totalEntries">
+                {{ cardStore.stats.totalEntries }}
+              </span>
+            </router-link>
+            <router-link to="/greeting" class="sidebar__item" active-class="active">
+              <span class="sidebar__item-icon">·</span> 开场白
+            </router-link>
+          </div>
+
+          <div class="sidebar__section">
+            <div class="sidebar__section-title">可选 · 锦上添花</div>
+            <router-link to="/npc" class="sidebar__item" active-class="active">
+              <span class="sidebar__item-icon">·</span> NPC 生成器
+            </router-link>
+            <router-link to="/player" class="sidebar__item" active-class="active">
+              <span class="sidebar__item-icon">·</span> 玩家角色
+            </router-link>
+            <router-link to="/dialogue" class="sidebar__item" active-class="active">
+              <span class="sidebar__item-icon">·</span> 对话样本
+            </router-link>
+            <router-link to="/extra" class="sidebar__item" active-class="active">
+              <span class="sidebar__item-icon">·</span> 额外需求
+            </router-link>
+          </div>
+
+          <div class="sidebar__section">
+            <div class="sidebar__section-title">高级 · 进阶功能</div>
+            <router-link to="/mvu" class="sidebar__item" active-class="active">
+              <span class="sidebar__item-icon">·</span> MVU 变量系统
+            </router-link>
+            <router-link to="/regex" class="sidebar__item" active-class="active">
+              <span class="sidebar__item-icon">·</span> 正则脚本
+              <span class="badge badge--info" v-if="cardStore.stats.regexCount">
+                {{ cardStore.stats.regexCount }}
+              </span>
+            </router-link>
+            <router-link to="/scripts" class="sidebar__item" active-class="active">
+              <span class="sidebar__item-icon">·</span> 酒馆助手脚本
+            </router-link>
+            <router-link to="/ejs" class="sidebar__item" active-class="active">
+              <span class="sidebar__item-icon">·</span> EJS 模板
+            </router-link>
+            <router-link to="/statusbar" class="sidebar__item" active-class="active">
+              <span class="sidebar__item-icon">·</span> 前端状态栏
+            </router-link>
+          </div>
+
+          <div class="sidebar__section">
+            <div class="sidebar__section-title">导出</div>
+            <router-link to="/package" class="sidebar__item" active-class="active">
+              <span class="sidebar__item-icon">·</span> 打包角色卡
+            </router-link>
+          </div>
+
+          <div class="sidebar__section">
+            <div class="sidebar__section-title">工具</div>
+            <router-link to="/assistant" class="sidebar__item" active-class="active">
+              <span class="sidebar__item-icon">·</span> AI 助手
+            </router-link>
+            <router-link to="/statistics" class="sidebar__item" active-class="active">
+              <span class="sidebar__item-icon">·</span> 卡片统计
+            </router-link>
+          </div>
+
+          <div class="sidebar__section">
+            <div class="sidebar__section-title">设置</div>
+            <router-link to="/api" class="sidebar__item" active-class="active">
+              <span class="sidebar__item-icon">·</span> API 设置
+              <span class="badge badge--success" v-if="apiStore.isConfigured">OK</span>
+            </router-link>
+          </div>
+        </nav>
+
+      </aside>
+
+      <!-- 内容区 -->
+      <main class="main-content">
+        <router-view />
+      </main>
+    </div>
+
+    <!-- Toast 通知 -->
+    <div class="toast-container">
+      <div
+        v-for="t in appStore.toasts"
+        :key="t.id"
+        :class="['toast', `toast--${t.type}`]"
+      >
+        {{ t.message }}
+      </div>
+    </div>
+  </div>
+</template>
+
+<script setup>
+import { onMounted, ref } from 'vue';
+import { useCardStore } from './stores/card.js';
+import { useApiStore } from './stores/api.js';
+import { useAppStore } from './stores/app.js';
+import wallpaperDataUrl from './wallpaper-data.js';
+
+const api = window.cardForgeAPI;
+const cardStore = useCardStore();
+const apiStore = useApiStore();
+const appStore = useAppStore();
+
+// 壁纸 - 内嵌 base64
+const wallpaperStyle = ref({ backgroundImage: `url(${wallpaperDataUrl})` });
+
+// 星空粒子 — 下落式
+function makeStars(count) {
+  const arr = [];
+  for (let i = 0; i < count; i++) {
+    const size = 1 + Math.random() * 2;
+    const duration = 6 + Math.random() * 10; // 6-16秒落下
+    const delay = Math.random() * duration;  // 错开起始时间
+    arr.push({
+      id: i,
+      style: {
+        left: Math.random() * 100 + '%',
+        top: '-10px',
+        width: size + 'px',
+        height: size + 'px',
+        animationDelay: delay + 's',
+        animationDuration: duration + 's'
+      }
+    });
+  }
+  return arr;
+}
+const stars = ref(makeStars(60));
+
+onMounted(async () => {
+  await appStore.loadTheme();
+  await apiStore.loadFromDisk();
+});
+</script>

@@ -1,0 +1,287 @@
+import { defineStore } from 'pinia';
+import { ref, computed, watch } from 'vue';
+
+export const useApiStore = defineStore('api', () => {
+  // State
+  const providers = ref([]);
+  const activeProviderId = ref(null);
+  let _autoSaveLoaded = false;
+  let _saveTimer = null;
+
+  // Create default providers
+  function initDefaults() {
+    if (providers.value.length === 0) {
+      providers.value = [
+        {
+          id: 'openai',
+          name: 'OpenAI 兼容',
+          type: 'openai',
+          baseUrl: 'https://api.openai.com/v1',
+          apiKey: '',
+          model: 'gpt-4o',
+          enabled: true
+        },
+        {
+          id: 'claude',
+          name: 'Claude (Anthropic)',
+          type: 'claude',
+          baseUrl: 'https://api.anthropic.com',
+          apiKey: '',
+          model: 'claude-sonnet-4-20250514',
+          enabled: false
+        },
+        {
+          id: 'gemini',
+          name: 'Gemini (Google)',
+          type: 'gemini',
+          baseUrl: 'https://generativelanguage.googleapis.com',
+          apiKey: '',
+          model: 'gemini-2.0-flash',
+          enabled: false
+        }
+      ];
+    }
+  }
+
+  const activeProvider = computed(() => {
+    if (activeProviderId.value) {
+      const p = providers.value.find(p => p.id === activeProviderId.value);
+      // 主动选的就用，即使没启用也用（用户意图优先）
+      if (p && p.apiKey) return p;
+    }
+    // fallback：第一个启用且有 key 的
+    return providers.value.find(p => p.enabled && p.apiKey);
+  });
+
+  const isConfigured = computed(() => {
+    return !!activeProvider.value;
+  });
+
+  // AI API call
+  async function chat(messages, options = {}) {
+    const provider = activeProvider.value;
+    if (!provider || !provider.apiKey) {
+      throw new Error('请先在 API 设置中配置至少一个 AI 服务商的 API Key');
+    }
+    return _callProvider(provider, messages, options);
+  }
+
+  // 用指定 provider 直接调用，不污染 store（用于 AI 娘自带 API 配置等场景）
+  async function chatWithProvider(provider, messages, options = {}) {
+    if (!provider || !provider.apiKey) {
+      throw new Error('provider 缺少 apiKey');
+    }
+    return _callProvider(provider, messages, options);
+  }
+
+  async function _callProvider(provider, messages, options) {
+    const temperature = options.temperature ?? 0.8;
+    const maxTokens = options.maxTokens ?? 4096;
+
+    if (provider.type === 'openai') {
+      return callOpenAI(provider, messages, temperature, maxTokens);
+    } else if (provider.type === 'claude') {
+      return callClaude(provider, messages, temperature, maxTokens);
+    } else if (provider.type === 'gemini') {
+      return callGemini(provider, messages, temperature, maxTokens);
+    }
+    throw new Error(`不支持的 API 类型: ${provider.type}`);
+  }
+
+  async function callOpenAI(provider, messages, temperature, maxTokens) {
+    const baseUrl = (provider.baseUrl || '').replace(/\/+$/, '');
+    const response = await fetch(`${baseUrl}/chat/completions`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${provider.apiKey}`
+      },
+      body: JSON.stringify({
+        model: provider.model,
+        messages,
+        temperature,
+        max_tokens: maxTokens
+      })
+    });
+
+    if (!response.ok) {
+      const err = await response.text();
+      throw new Error(`OpenAI API 错误 (${response.status}): ${err}`);
+    }
+
+    const data = await response.json();
+    const content = data?.choices?.[0]?.message?.content;
+    if (typeof content !== 'string') {
+      throw new Error('OpenAI 返回数据异常：' + JSON.stringify(data).slice(0, 200));
+    }
+    return content;
+  }
+
+  async function callClaude(provider, messages, temperature, maxTokens) {
+    // Extract system message
+    const systemMsg = messages.find(m => m.role === 'system');
+    const userMessages = messages.filter(m => m.role !== 'system');
+
+    const body = {
+      model: provider.model,
+      max_tokens: maxTokens,
+      temperature,
+      messages: userMessages.map(m => ({ role: m.role, content: m.content }))
+    };
+    if (systemMsg) body.system = systemMsg.content;
+
+    const baseUrl = (provider.baseUrl || '').replace(/\/+$/, '');
+    const response = await fetch(`${baseUrl}/v1/messages`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': provider.apiKey,
+        'anthropic-version': '2023-06-01',
+        'anthropic-dangerous-direct-browser-access': 'true'
+      },
+      body: JSON.stringify(body)
+    });
+
+    if (!response.ok) {
+      const err = await response.text();
+      throw new Error(`Claude API 错误 (${response.status}): ${err}`);
+    }
+
+    const data = await response.json();
+    const text = data?.content?.[0]?.text;
+    if (typeof text !== 'string') {
+      throw new Error('Claude 返回数据异常：' + JSON.stringify(data).slice(0, 200));
+    }
+    return text;
+  }
+
+  async function callGemini(provider, messages, temperature, maxTokens) {
+    // Convert messages to Gemini format
+    const contents = [];
+    let systemInstruction = null;
+
+    for (const msg of messages) {
+      if (msg.role === 'system') {
+        systemInstruction = msg.content;
+      } else {
+        contents.push({
+          role: msg.role === 'assistant' ? 'model' : 'user',
+          parts: [{ text: msg.content }]
+        });
+      }
+    }
+
+    const body = {
+      contents,
+      generationConfig: {
+        temperature,
+        maxOutputTokens: maxTokens
+      }
+    };
+    if (systemInstruction) {
+      body.systemInstruction = { parts: [{ text: systemInstruction }] };
+    }
+
+    const baseUrl = (provider.baseUrl || '').replace(/\/+$/, '');
+    // 用 header 传 API Key（避免出现在 URL 里被日志/历史记录捕获）
+    const url = `${baseUrl}/v1beta/models/${provider.model}:generateContent`;
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-goog-api-key': provider.apiKey
+      },
+      body: JSON.stringify(body)
+    });
+
+    if (!response.ok) {
+      const err = await response.text();
+      throw new Error(`Gemini API 错误 (${response.status}): ${err}`);
+    }
+
+    const data = await response.json();
+    const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
+    if (typeof text !== 'string') {
+      throw new Error('Gemini 返回数据异常：' + JSON.stringify(data).slice(0, 200));
+    }
+    return text;
+  }
+
+  // Persistence
+  async function loadFromDisk() {
+    try {
+      const settings = await window.cardForgeAPI.loadSettings();
+      if (settings.apiProviders) providers.value = settings.apiProviders;
+      if (settings.activeProviderId) activeProviderId.value = settings.activeProviderId;
+    } catch (e) {}
+    initDefaults();
+    // 加载完成后才启动自动保存监听，避免初始化时触发写盘
+    _autoSaveLoaded = true;
+  }
+
+  // 先读后写，不会覆盖其他 store 的字段
+  // 必须深度克隆，避免 Vue reactive proxy 通过 IPC structured clone 失败
+  async function saveToDisk() {
+    let settings = {};
+    try {
+      settings = await window.cardForgeAPI.loadSettings() || {};
+    } catch (e) {}
+    settings.apiProviders = JSON.parse(JSON.stringify(providers.value));
+    settings.activeProviderId = activeProviderId.value;
+    const result = await window.cardForgeAPI.saveSettings(settings);
+    if (result && result.success === false) {
+      throw new Error(result.error || '保存失败');
+    }
+  }
+
+  // debounce 自动保存（300ms）
+  function scheduleSave() {
+    if (!_autoSaveLoaded) return;
+    if (_saveTimer) clearTimeout(_saveTimer);
+    _saveTimer = setTimeout(() => {
+      saveToDisk().catch(e => {
+        // 用 lazy import 避免循环依赖
+        import('./app.js').then(({ useAppStore }) => {
+          try { useAppStore().toastError('API 设置保存失败：' + e.message); } catch {}
+        });
+      });
+      _saveTimer = null;
+    }, 300);
+  }
+
+  // 监听整个 providers 数组的深度变化（包括 apiKey/baseUrl/model/enabled 等）
+  watch(providers, scheduleSave, { deep: true });
+  watch(activeProviderId, scheduleSave);
+
+  // 设置当前激活服务商
+  function setActiveProvider(id) {
+    activeProviderId.value = id;
+  }
+
+  function addProvider() {
+    const id = 'custom_' + Date.now();
+    providers.value.push({
+      id,
+      name: '自定义服务',
+      type: 'openai',
+      baseUrl: '',
+      apiKey: '',
+      model: '',
+      enabled: true
+    });
+    return id;
+  }
+
+  function removeProvider(id) {
+    const idx = providers.value.findIndex(p => p.id === id);
+    if (idx !== -1) providers.value.splice(idx, 1);
+    // 如果删的是当前激活的，清空 activeProviderId
+    if (activeProviderId.value === id) activeProviderId.value = null;
+  }
+
+  return {
+    providers, activeProviderId, activeProvider, isConfigured,
+    chat, chatWithProvider, loadFromDisk, saveToDisk, addProvider, removeProvider, initDefaults,
+    setActiveProvider
+  };
+});

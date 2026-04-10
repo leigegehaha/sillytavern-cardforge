@@ -1,0 +1,78 @@
+{
+  "name": "sillytavern-cardforge",
+  "version": "1.0.0",
+  "description": "SillyTavern 角色卡锻造炉 - 全功能角色卡制作工具",
+  "main": "src/main/main.js",
+  "scripts": {
+    "dev": "vite",
+    "build:renderer": "vite build",
+    "electron:dev": "node scripts/dev.js",
+    "dist": "npm run build:renderer && electron-builder"
+  },
+  "build": {
+    "appId": "com.cardforge.sillytavern",
+    "productName": "SillyTavern CardForge",
+    "directories": {
+      "output": "dist_electron"
+    },
+    "files": [
+      "dist/**/*",
+      "src/main/**/*"
+    ],
+    "extraResources": [
+      {
+        "from": "public/live2d",
+        "to": "live2d"
+      }
+    ],
+    "win": {
+      "target": "dir",
+      "icon": "public/icon.ico",
+      "signAndEditExecutable": false
+    },
+    "asar": true
+  },
+  "keywords": [
+    "sillytavern",
+    "character-card",
+    "角色卡",
+    "electron",
+    "vue3"
+  ],
+  "author": "Anastasia2372",
+  "license": "GPL-3.0-or-later",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Anastasia2372/sillytavern-cardforge.git"
+  },
+  "homepage": "https://github.com/Anastasia2372/sillytavern-cardforge",
+  "bugs": {
+    "url": "https://github.com/Anastasia2372/sillytavern-cardforge/issues"
+  },
+  "type": "commonjs",
+  "dependencies": {
+    "png-chunk-text": "^1.0.0",
+    "png-chunks-encode": "^1.0.0",
+    "png-chunks-extract": "^1.0.0"
+  },
+  "devDependencies": {
+    "@codemirror/lang-css": "^6.3.1",
+    "@codemirror/lang-html": "^6.4.11",
+    "@codemirror/lang-javascript": "^6.2.5",
+    "@codemirror/state": "^6.6.0",
+    "@codemirror/theme-one-dark": "^6.1.3",
+    "@codemirror/view": "^6.41.0",
+    "@vitejs/plugin-vue": "^6.0.5",
+    "codemirror": "^6.0.2",
+    "electron": "^41.1.1",
+    "electron-builder": "^26.8.1",
+    "pinia": "^3.0.4",
+    "pixi-live2d-display": "^0.4.0",
+    "pixi.js": "^6.5.10",
+    "rcedit": "^5.0.2",
+    "sass": "^1.99.0",
+    "vite": "^8.0.3",
+    "vue": "^3.5.32",
+    "vue-router": "^4.6.4"
+  }
+}
