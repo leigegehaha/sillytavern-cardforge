@@ -58,10 +58,15 @@ CardForge 是一款专为 SillyTavern 用户设计的桌面级角色卡制作工
 
 ### 第一步：下载项目
 
-打开终端（Windows 搜索"cmd"或"PowerShell"），输入：
+打开终端（Windows 搜索"cmd"或"PowerShell"），先下载项目：
 
 ```bash
 git clone https://github.com/Anastasia2372/sillytavern-cardforge.git
+```
+
+下载完成后，进入项目目录：
+
+```bash
 cd sillytavern-cardforge
 ```
 
