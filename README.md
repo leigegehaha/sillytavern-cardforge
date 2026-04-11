@@ -48,23 +48,79 @@ CardForge 是一款专为 SillyTavern 用户设计的桌面级角色卡制作工
 
 ## 安装与运行
 
-### 开发模式
+### 前置要求
+
+- **Node.js** 16 或以上版本 — [下载地址](https://nodejs.org/)
+  - 安装时勾选"Add to PATH"
+  - 安装完成后打开终端输入 `node -v` 确认能看到版本号
+- **Git** — [下载地址](https://git-scm.com/)
+  - 安装时一路默认即可
+
+### 第一步：下载项目
+
+打开终端（Windows 搜索"cmd"或"PowerShell"），输入：
 
 ```bash
 git clone https://github.com/Anastasia2372/sillytavern-cardforge.git
 cd sillytavern-cardforge
+```
+
+### 第二步：安装依赖
+
+```bash
 npm install
+```
+
+这一步会自动下载所有需要的库，可能需要几分钟，等它跑完就行。
+
+如果遇到网络问题，可以先设置国内镜像：
+
+```bash
+npm config set registry https://registry.npmmirror.com
+npm install
+```
+
+### 第三步：运行
+
+有两种方式：
+
+**方式一：开发模式（推荐新手）**
+
+```bash
 npm run dev
 ```
 
-### 打包成 .exe
+直接弹出窗口，改代码会自动刷新。
+
+**方式二：打包成 .exe**
 
 ```bash
 npm run build
 npx electron-builder --win --x64 --dir
 ```
 
-打包产物在 `dist_electron/win-unpacked/` 目录。
+打包完成后在 `dist_electron/win-unpacked/` 目录里找到 `SillyTavern CardForge.exe`，双击运行。
+
+### 第四步：配置 API
+
+打开软件后，点左侧「API 设置」，填入你自己的 API Key。支持：
+
+- **OpenAI 兼容**（包括各种中转）
+- **Claude (Anthropic)**
+- **Gemini (Google)**
+
+填好 Key 后 AI 辅助功能（世界书生成、NPC 生成、AI 助手等）就能用了。不配置 API 也可以手动编辑，只是没有 AI 辅助。
+
+### 常见问题
+
+**Q: npm install 报错**
+A: 检查 Node.js 版本是否 >= 16，试试用管理员权限运行终端。
+
+**Q: 打包时报错**
+A: 确保 `npm run build` 先执行成功再跑 electron-builder。
+
+**Q: 打开后白屏**
+A: 用开发模式 `npm run dev` 试试，看终端有没有报错信息。
 
 ---
 
