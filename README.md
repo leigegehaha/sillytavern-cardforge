@@ -85,19 +85,7 @@ npm config set registry https://registry.npmmirror.com
 npm install
 ```
 
-### 第三步：运行
-
-有两种方式：
-
-**方式一：开发模式（推荐新手）**
-
-```bash
-npm run dev
-```
-
-直接弹出窗口，改代码会自动刷新。
-
-**方式二：打包成 .exe**
+### 第三步：打包运行
 
 ```bash
 npm run build
@@ -105,6 +93,14 @@ npx electron-builder --win --x64 --dir
 ```
 
 打包完成后在 `dist_electron/win-unpacked/` 目录里找到 `SillyTavern CardForge.exe`，双击运行。
+
+> **开发模式（仅供需要修改源代码的开发者使用，普通用户请忽略）**
+>
+> ```bash
+> npm run dev
+> ```
+>
+> 启动开发服务器，修改代码后界面会自动刷新。注意：开发模式下部分功能（如 API 设置保存、角色卡导入）可能不稳定，请以打包后的正式版为准。
 
 ### 第四步：配置 API
 
