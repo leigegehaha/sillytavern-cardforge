@@ -5,7 +5,6 @@
   "main": "src/main/main.js",
   "scripts": {
     "dev": "vite",
-    "build": "vite build",
     "build:renderer": "vite build",
     "electron:dev": "node scripts/dev.js",
     "dist": "npm run build:renderer && electron-builder"
@@ -27,9 +26,18 @@
       }
     ],
     "win": {
-      "target": "dir",
+      "target": ["nsis", "dir"],
       "icon": "public/icon.ico",
       "signAndEditExecutable": false
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "installerLanguages": ["zh_CN"],
+      "language": "2052",
+      "installerIcon": "public/icon.ico",
+      "uninstallerIcon": "public/icon.ico",
+      "shortcutName": "CardForge"
     },
     "asar": true
   },

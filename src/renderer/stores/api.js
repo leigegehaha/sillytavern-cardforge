@@ -299,9 +299,37 @@ export const useApiStore = defineStore('api', () => {
     if (activeProviderId.value === id) activeProviderId.value = null;
   }
 
+  async function fetchModels(provider) {
+    if (!provider || !provider.apiKey) return [];
+    const baseUrl = (provider.baseUrl || '').replace(/\/+$/, '');
+    try {
+      if (provider.type === 'openai') {
+        const resp = await fetch(`${baseUrl}/models`, {
+          headers: { 'Authorization': `Bearer ${provider.apiKey}` }
+        });
+        if (!resp.ok) return [];
+        const data = await resp.json();
+        return (data.data || []).map(m => m.id).sort();
+      } else if (provider.type === 'claude') {
+        const resp = await fetch(`${baseUrl}/v1/models`, {
+          headers: { 'x-api-key': provider.apiKey, 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true' }
+        });
+        if (!resp.ok) return [];
+        const data = await resp.json();
+        return (data.data || []).map(m => m.id).sort();
+      } else if (provider.type === 'gemini') {
+        const resp = await fetch(`${baseUrl}/v1beta/models?key=${provider.apiKey}`);
+        if (!resp.ok) return [];
+        const data = await resp.json();
+        return (data.models || []).map(m => m.name.replace('models/', '')).sort();
+      }
+    } catch (e) {}
+    return [];
+  }
+
   return {
     providers, activeProviderId, activeProvider, isConfigured,
-    chat, chatWithProvider, getModelMaxTokens, loadFromDisk, saveToDisk, addProvider, removeProvider, initDefaults,
+    chat, chatWithProvider, getModelMaxTokens, fetchModels, loadFromDisk, saveToDisk, addProvider, removeProvider, initDefaults,
     setActiveProvider
   };
 });

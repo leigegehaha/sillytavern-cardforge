@@ -59,7 +59,16 @@
           </div>
           <div class="form-group" style="flex:1">
             <label>模型</label>
-            <input class="input" v-model="p.model" placeholder="如 gpt-4o">
+            <div class="flex-row">
+              <select v-if="modelLists[p.id]?.length" class="select flex-1" v-model="p.model">
+                <option value="">-- 选择模型 --</option>
+                <option v-for="m in modelLists[p.id]" :key="m" :value="m">{{ m }}</option>
+              </select>
+              <input v-else class="input flex-1" v-model="p.model" placeholder="填入Key后点获取">
+              <button class="btn btn--sm" @click="loadModels(p)" :disabled="modelLoading[p.id] || !p.apiKey">
+                {{ modelLoading[p.id] ? '...' : '获取' }}
+              </button>
+            </div>
           </div>
         </div>
         <div class="flex-row">
@@ -80,13 +89,35 @@
 </template>
 
 <script setup>
-import { ref } from 'vue';
+import { ref, reactive } from 'vue';
 import { useApiStore } from '../stores/api.js';
 import { useAppStore } from '../stores/app.js';
 
 const apiStore = useApiStore();
 const appStore = useAppStore();
 const testing = ref(null);
+const modelLists = reactive({});
+const modelLoading = reactive({});
+
+async function loadModels(provider) {
+  if (!provider.apiKey) { appStore.toastWarning('请先填写 API Key'); return; }
+  if (!provider.baseUrl) { appStore.toastWarning('请先填写 Base URL'); return; }
+  modelLoading[provider.id] = true;
+  try {
+    const models = await apiStore.fetchModels(provider);
+    if (models.length > 0) {
+      modelLists[provider.id] = models;
+      if (!provider.model || !models.includes(provider.model)) {
+        provider.model = models[0];
+      }
+      appStore.toastSuccess(`获取到 ${models.length} 个模型`);
+    } else {
+      appStore.toastWarning('未获取到模型列表，请检查 Key 和 Base URL');
+    }
+  } catch (e) {
+    appStore.toastError('获取模型失败: ' + e.message);
+  } finally { modelLoading[provider.id] = false; }
+}
 
 function addProvider() {
   apiStore.addProvider();
