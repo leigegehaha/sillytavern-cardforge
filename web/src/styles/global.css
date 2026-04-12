@@ -311,6 +311,39 @@ body {
   background: rgba(255, 255, 255, 0.05);
 }
 
+/* 自定义确认弹窗 */
+.cf-confirm-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  z-index: 10000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.cf-confirm-dialog {
+  background: var(--cf-bg-card);
+  border: 1px solid var(--cf-border);
+  border-radius: 12px;
+  padding: 24px;
+  min-width: 300px;
+  max-width: 90vw;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+}
+
+.cf-confirm-msg {
+  font-size: 15px;
+  line-height: 1.6;
+  margin-bottom: 20px;
+}
+
+.cf-confirm-btns {
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+}
+
 .flex-row {
   display: flex;
   align-items: center;

@@ -5,6 +5,11 @@ export const useAppStore = defineStore('app', () => {
   const toasts = ref([]);
   let toastId = 0;
 
+  // 自定义确认弹窗状态
+  const confirmVisible = ref(false);
+  const confirmMessage = ref('');
+  let _confirmResolve = null;
+
   function toast(message, type = 'info', duration = 3000) {
     const id = ++toastId;
     toasts.value.push({ id, message, type });
@@ -19,13 +24,27 @@ export const useAppStore = defineStore('app', () => {
   function toastInfo(msg) { toast(msg, 'info'); }
 
   function confirmAction(msg, callback) {
-    if (window.confirm(msg)) {
-      callback();
+    confirmMessage.value = msg;
+    confirmVisible.value = true;
+    _confirmResolve = callback;
+  }
+
+  function confirmYes() {
+    confirmVisible.value = false;
+    if (_confirmResolve) {
+      _confirmResolve();
+      _confirmResolve = null;
     }
   }
 
+  function confirmNo() {
+    confirmVisible.value = false;
+    _confirmResolve = null;
+  }
+
   return {
-    toasts,
-    toast, toastSuccess, toastError, toastWarning, toastInfo, confirmAction
+    toasts, confirmVisible, confirmMessage,
+    toast, toastSuccess, toastError, toastWarning, toastInfo,
+    confirmAction, confirmYes, confirmNo
   };
 });

@@ -24,7 +24,12 @@ export async function readPngCardData(arrayBuffer) {
       if (keyword === 'chara') {
         const value = uint8ArrayToString(chunk.data.slice(sepIdx + 1));
         try {
-          const json = JSON.parse(atob(value));
+          // base64 解码后用 TextDecoder 处理 UTF-8（支持中文）
+          const binaryStr = atob(value);
+          const bytes = new Uint8Array(binaryStr.length);
+          for (let i = 0; i < binaryStr.length; i++) bytes[i] = binaryStr.charCodeAt(i);
+          const jsonStr = new TextDecoder('utf-8').decode(bytes);
+          const json = JSON.parse(jsonStr);
           return { cardData: json, imageBase64: 'data:image/png;base64,' + imageBase64 };
         } catch (e) {
           console.error('Failed to parse chara data:', e);

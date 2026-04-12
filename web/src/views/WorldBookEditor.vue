@@ -6,8 +6,11 @@
         <p>管理角色卡的世界书条目 — 当前 {{ entries.length }} 条</p>
       </div>
       <div class="flex-row">
-        <button class="btn btn--secondary btn--sm" @click="showAiPanel = !showAiPanel">
+        <button class="btn btn--secondary btn--sm" @click="showAiPanel = !showAiPanel; showNovelPanel = false">
           {{ showAiPanel ? '关闭AI生成' : 'AI 生成条目' }}
+        </button>
+        <button class="btn btn--accent btn--sm" @click="showNovelPanel = !showNovelPanel; showAiPanel = false">
+          {{ showNovelPanel ? '关闭' : '小说转世界书' }}
         </button>
         <button class="btn btn--secondary btn--sm" @click="handleFilter">
           {{ filterText ? '清除筛选' : '筛选' }}
@@ -32,7 +35,7 @@
             placeholder="详细描述你的世界观设定，越具体越好。例如：&#10;&#10;这是一个修仙世界，以灵气为修炼基础。修为境界分为：凡人→炼气→筑基→金丹→元婴→化神。世界中有多个宗门势力，以青云宗为主。货币系统使用灵石（下品/中品/上品）。主角是青云宗的外门弟子，刚入门不久..."></textarea>
         </div>
 
-        <div class="form-row">
+        <div class="grid-3">
           <div class="form-group">
             <label>生成类型</label>
             <div class="ai-checks">
@@ -111,6 +114,51 @@
       </div>
     </div>
 
+    <!-- 小说转世界书面板 -->
+    <div v-if="showNovelPanel" class="card mb-md">
+      <div class="card__header"><h3>小说转世界书</h3></div>
+      <div class="card__body">
+        <p class="hint mb-md">粘贴小说文本，AI 会自动提取世界观、角色、地点、规则等信息，生成世界书条目。</p>
+        <div class="form-group">
+          <label>小说文本</label>
+          <textarea class="textarea" v-model="novelText" rows="12"
+            placeholder="粘贴你的小说内容...支持任意长度，AI 会自动分析提取关键设定。"></textarea>
+          <div class="hint">{{ (novelText || '').length }} 字</div>
+        </div>
+        <div class="form-group">
+          <label>额外要求（可选）</label>
+          <input class="input" v-model="novelExtra"
+            placeholder="如：重点提取NPC信息 / 只要世界观不要角色 / 用json格式...">
+        </div>
+        <button class="btn btn--accent" style="width:100%;padding:10px"
+          @click="generateFromNovel" :disabled="novelGenerating || !novelText.trim()">
+          {{ novelGenerating ? 'AI 正在分析小说...' : '开始提取世界书' }}
+        </button>
+
+        <!-- 提取结果预览 -->
+        <div v-if="novelResults.length > 0" class="mt-md">
+          <div class="flex-between mb-md">
+            <span class="badge badge--accent">提取到 {{ novelResults.length }} 条</span>
+            <div class="flex-row">
+              <button class="btn btn--primary btn--sm" @click="injectNovelResults">注入选中条目</button>
+              <button class="btn btn--ghost btn--sm" @click="novelResults.forEach(r => r.selected = true)">全选</button>
+              <button class="btn btn--ghost btn--sm" @click="novelResults.forEach(r => r.selected = false)">全不选</button>
+            </div>
+          </div>
+          <div v-for="(r, i) in novelResults" :key="i" class="ai-result-item" :class="{ 'ai-result-item--selected': r.selected }">
+            <div class="ai-result-item__header" @click="r.selected = !r.selected">
+              <label class="toggle-label" @click.stop>
+                <input type="checkbox" v-model="r.selected">
+              </label>
+              <span class="ai-result-item__name">{{ r.comment }}</span>
+              <span v-if="r.constant" class="badge badge--warning">常驻</span>
+            </div>
+            <pre class="ai-result-item__content selectable">{{ r.content }}</pre>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <!-- 筛选栏 -->
     <div v-if="showFilter" class="card mb-md">
       <div class="card__body flex-row">
@@ -171,7 +219,7 @@
     </div>
 
     <div v-else>
-      <div v-for="(entry, idx) in filteredEntries" :key="entry.id" class="wb-entry"
+      <div v-for="(entry, idx) in filteredEntries" :key="entry.id + '_' + listVersion" class="wb-entry"
         :class="{ 'wb-entry--disabled': !entry.enabled, 'wb-entry--constant': entry.constant && entry.enabled, 'wb-entry--dragging': dragSourceId === entry.id, 'wb-entry--dragover': dragOverId === entry.id }"
         :draggable="dragEnabledId === entry.id"
         @dragstart="onDragStart($event, entry.id)"
@@ -210,13 +258,13 @@
           <div class="flex-row" @click.stop>
             <span class="wb-entry__meta">{{ entry.position }}</span>
             <button class="btn btn--ghost btn--sm" @click="store.duplicateWorldEntry(entry.id)">复制</button>
-            <button class="btn btn--danger btn--sm" @click="appStore.confirmAction('删除这条世界书条目？', () => store.removeWorldEntry(entry.id))">删除</button>
+            <button class="btn btn--danger btn--sm" @click="appStore.confirmAction('删除这条世界书条目？', () => deleteEntry(entry.id))">删除</button>
           </div>
         </div>
 
         <!-- 条目详情 -->
         <div v-if="expandedIds.has(entry.id)" class="wb-entry__body">
-          <div class="form-row">
+          <div class="grid-2">
             <div class="form-group">
               <label>条目名称 (comment)</label>
               <input class="input" v-model="entry.comment" @input="store.markDirty()">
@@ -237,7 +285,7 @@
             <div class="hint">{{ (entry.content || '').length }} 字符 | ~{{ Math.round((entry.content || '').length * 1.3) }} Token</div>
           </div>
 
-          <div class="form-row">
+          <div class="grid-3">
             <div class="form-group">
               <label>插入位置 (position)</label>
               <select class="select" v-model="entry.position" @change="syncPosition(entry); store.markDirty()">
@@ -309,7 +357,7 @@
           <details class="mt-md">
             <summary style="font-size:12px;color:var(--cf-text-muted);cursor:pointer">高级设置</summary>
             <div style="margin-top:12px">
-              <div class="form-row">
+              <div class="grid-3">
                 <div class="form-group">
                   <label>角色 (role)</label>
                   <select class="select" v-model.number="entry.extensions.role" @change="store.markDirty()">
@@ -330,7 +378,7 @@
                   <div class="hint">留空则用全局深度</div>
                 </div>
               </div>
-              <div class="form-row">
+              <div class="grid-3">
                 <div class="form-group">
                   <label>分组 (group)</label>
                   <input class="input" v-model="entry.extensions.group" @input="store.markDirty()">
@@ -346,7 +394,7 @@
                   <div class="hint">触发后持续激活的轮数</div>
                 </div>
               </div>
-              <div class="form-row">
+              <div class="grid-3">
                 <div class="form-group">
                   <label>冷却 (cooldown)</label>
                   <input class="input" type="number" v-model.number="entry.extensions.cooldown" placeholder="0" @input="store.markDirty()">
@@ -384,7 +432,7 @@
 </template>
 
 <script setup>
-import { ref, computed } from 'vue';
+import { ref, computed, nextTick } from 'vue';
 import { useCardStore } from '../stores/card.js';
 import { useApiStore } from '../stores/api.js';
 import { useAppStore } from '../stores/app.js';
@@ -401,6 +449,91 @@ const filterText = ref('');
 const filterType = ref('');
 const filterPosition = ref('');
 const expandedIds = ref(new Set());
+const listVersion = ref(0);
+
+// 小说转世界书
+const showNovelPanel = ref(false);
+const novelText = ref('');
+const novelExtra = ref('');
+const novelGenerating = ref(false);
+const novelResults = ref([]);
+
+async function generateFromNovel() {
+  if (!apiStore.isConfigured) { appStore.toastError('请先配置 API Key'); return; }
+  if (!novelText.value.trim()) return;
+  novelGenerating.value = true;
+  novelResults.value = [];
+
+  try {
+    const textPreview = novelText.value.slice(0, 8000);
+    const prompt = `你是 SillyTavern 世界书架构专家。请从以下小说文本中提取世界观设定，生成世界书条目。
+
+【小说文本】
+${textPreview}
+
+${novelExtra.value ? '【额外要求】\n' + novelExtra.value + '\n' : ''}
+
+请从小说中提取以下信息并生成世界书条目：
+- 世界观/背景设定（constant=true）
+- 重要角色（每个角色一条，含外貌、性格、背景）
+- 重要地点/场景
+- 特殊规则/力量体系
+- 重要物品/组织
+
+输出 JSON 数组格式：
+[
+  {
+    "comment": "条目名称",
+    "keys": ["关键词1", "关键词2"],
+    "content": "条目内容",
+    "constant": true或false,
+    "position": "before_char",
+    "insertion_order": 100
+  }
+]
+
+角色条目用关键词触发（constant=false），世界观规则用常驻（constant=true）。
+只输出 JSON 数组，不要其他文字。`;
+
+    const parsed = await chatForJsonArray(apiStore, [
+      { role: 'system', content: '你是世界书架构专家，擅长从小说文本中提取世界观设定。只输出合法JSON数组。' },
+      { role: 'user', content: prompt }
+    ], { temperature: 0.7, maxTokens: apiStore.getModelMaxTokens(apiStore.activeProvider?.model) });
+
+    novelResults.value = parsed.map(item => ({
+      ...item,
+      selected: true,
+      keys: item.keys || [],
+      constant: item.constant ?? false,
+      position: item.position || 'before_char',
+      insertion_order: item.insertion_order || 100
+    }));
+
+    appStore.toastSuccess(`从小说中提取了 ${novelResults.value.length} 条世界书条目`);
+  } catch (e) {
+    appStore.toastError('提取失败: ' + e.message);
+  } finally { novelGenerating.value = false; }
+}
+
+function injectNovelResults() {
+  const selected = novelResults.value.filter(r => r.selected);
+  if (selected.length === 0) { appStore.toastWarning('请至少选中一条'); return; }
+
+  for (const item of selected) {
+    const entry = store.addWorldEntry();
+    entry.comment = item.comment || '';
+    entry.keys = item.keys || [];
+    entry.content = item.content || '';
+    entry.constant = item.constant ?? false;
+    entry.position = item.position || 'before_char';
+    entry.insertion_order = item.insertion_order || 100;
+    entry.extensions.position = entry.position === 'before_char' ? 0 : 1;
+  }
+
+  appStore.toastSuccess(`已注入 ${selected.length} 条世界书条目`);
+  novelResults.value = [];
+  showNovelPanel.value = false;
+}
 
 // AI 生成相关
 const showAiPanel = ref(false);
@@ -612,11 +745,30 @@ function handleFilter() {
 function handleAdd() {
   const entry = store.addWorldEntry();
   expandedIds.value.add(entry.id);
+  nextTick(() => {
+    const el = document.querySelector(`.wb-entry:last-child .input, .wb-entry:last-child .textarea`);
+    if (el) el.focus();
+  });
 }
 
 function toggleExpand(id) {
   if (expandedIds.value.has(id)) expandedIds.value.delete(id);
   else expandedIds.value.add(id);
+}
+
+function deleteEntry(id) {
+  expandedIds.value.delete(id);
+  store.removeWorldEntry(id);
+  renumberEntries();
+  listVersion.value++;
+}
+
+function renumberEntries() {
+  const sorted = filteredEntries.value;
+  for (let i = 0; i < sorted.length; i++) {
+    if (!sorted[i].extensions) sorted[i].extensions = {};
+    sorted[i].extensions.cfSortKey = i + 1;
+  }
 }
 
 // 排序：数字框 — 插入到目标位置，其他条目自动重新编号
@@ -757,9 +909,12 @@ function wbBatchDelete() {
   const count = wbSelectedIds.value.size;
   appStore.confirmAction(`确定删除选中的 ${count} 条世界书条目？`, () => {
     for (const id of wbSelectedIds.value) {
+      expandedIds.value.delete(id);
       store.removeWorldEntry(id);
     }
     wbSelectedIds.value = new Set();
+    renumberEntries();
+    listVersion.value++;
     appStore.toastSuccess(`已删除 ${count} 条世界书条目`);
   });
 }

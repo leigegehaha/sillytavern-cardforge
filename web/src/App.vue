@@ -21,13 +21,15 @@
         <button class="sidebar__btn" @click="exportJson">导出 JSON</button>
         <button class="sidebar__btn sidebar__btn--danger" @click="newCard">新建空卡</button>
 
-        <div class="sidebar__section">编辑</div>
-        <router-link v-for="link in navLinks" :key="link.path"
-          :to="link.path" class="sidebar__link"
-          :class="{ active: $route.path === link.path }"
-          @click="sidebarOpen = false">
-          {{ link.label }}
-        </router-link>
+        <template v-for="section in navSections" :key="section.title">
+          <div class="sidebar__section">{{ section.title }}</div>
+          <router-link v-for="link in section.links" :key="link.path"
+            :to="link.path" class="sidebar__link"
+            :class="{ active: $route.path === link.path }"
+            @click="sidebarOpen = false">
+            {{ link.label }}
+          </router-link>
+        </template>
       </nav>
       <div class="sidebar__footer">
         <span class="sidebar__card-name">{{ cardStore.cardName || '未加载' }}</span>
@@ -41,6 +43,17 @@
     <main class="main">
       <router-view />
     </main>
+
+    <!-- 自定义确认弹窗 -->
+    <div v-if="appStore.confirmVisible" class="cf-confirm-overlay" @click.self="appStore.confirmNo()">
+      <div class="cf-confirm-dialog">
+        <div class="cf-confirm-msg">{{ appStore.confirmMessage }}</div>
+        <div class="cf-confirm-btns">
+          <button class="btn btn--danger" @click="appStore.confirmYes()">确认</button>
+          <button class="btn" @click="appStore.confirmNo()">取消</button>
+        </div>
+      </div>
+    </div>
 
     <!-- Toast 提示 -->
     <div class="toast-container">
@@ -61,19 +74,35 @@ const cardStore = useCardStore();
 const appStore = useAppStore();
 const sidebarOpen = ref(false);
 
-const navLinks = [
-  { path: '/basic', label: '基本信息' },
-  { path: '/greeting', label: '开场白' },
-  { path: '/worldbook', label: '世界书' },
-  { path: '/regex', label: '正则脚本' },
-  { path: '/script', label: '酒馆脚本' },
-  { path: '/ejs', label: 'EJS 模板' },
-  { path: '/mvu', label: 'MVU 变量' },
-  { path: '/statusbar', label: '状态栏' },
-  { path: '/npc', label: 'NPC 生成' },
-  { path: '/stats', label: '卡片统计' },
-  { path: '/api', label: 'API 设置' },
+const navSections = [
+  { title: '必填', links: [
+    { path: '/basic', label: '基本信息' },
+    { path: '/charsetting', label: '角色设定' },
+    { path: '/worldbook', label: '世界书' },
+    { path: '/greeting', label: '开场白' },
+  ]},
+  { title: '可选', links: [
+    { path: '/npc', label: 'NPC 生成器' },
+    { path: '/player', label: '玩家角色' },
+    { path: '/dialogue', label: '对话样本' },
+    { path: '/extra', label: '额外需求' },
+  ]},
+  { title: '高级', links: [
+    { path: '/mvu', label: 'MVU 变量系统' },
+    { path: '/regex', label: '正则脚本' },
+    { path: '/script', label: '酒馆助手脚本' },
+    { path: '/ejs', label: 'EJS 模板' },
+    { path: '/statusbar', label: '前端状态栏' },
+  ]},
+  { title: '工具', links: [
+    { path: '/assistant', label: 'AI 助手' },
+    { path: '/stats', label: '卡片统计' },
+  ]},
+  { title: '设置', links: [
+    { path: '/api', label: 'API 设置' },
+  ]},
 ];
+const navLinks = navSections.flatMap(s => s.links);
 
 async function importCard() {
   sidebarOpen.value = false;
