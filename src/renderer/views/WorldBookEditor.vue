@@ -118,11 +118,14 @@
     <div v-if="showNovelPanel" class="card mb-md">
       <div class="card__header"><h3>小说转世界书</h3></div>
       <div class="card__body">
-        <p class="hint mb-md">粘贴小说文本，AI 会自动提取世界观、角色、地点、规则等信息，生成世界书条目。</p>
+        <p class="hint mb-md">粘贴小说文本或导入 txt 文件，AI 会自动提取世界观、角色、地点、规则等信息，生成世界书条目。</p>
         <div class="form-group">
-          <label>小说文本</label>
+          <div class="flex-between" style="margin-bottom:4px">
+            <label>小说文本</label>
+            <button class="btn btn--secondary btn--sm" @click="importNovelFile">导入 txt 文件</button>
+          </div>
           <textarea class="textarea" v-model="novelText" rows="12"
-            placeholder="粘贴你的小说内容...支持任意长度，AI 会自动分析提取关键设定。"></textarea>
+            placeholder="粘贴你的小说内容，或点击上方「导入 txt 文件」"></textarea>
           <div class="hint">{{ (novelText || '').length }} 字</div>
         </div>
         <div class="form-group">
@@ -457,6 +460,24 @@ const novelText = ref('');
 const novelExtra = ref('');
 const novelGenerating = ref(false);
 const novelResults = ref([]);
+
+function importNovelFile() {
+  const input = document.createElement('input');
+  input.type = 'file';
+  input.accept = '.txt,.text,.md';
+  input.onchange = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    try {
+      const text = await file.text();
+      novelText.value = text;
+      appStore.toastSuccess(`已导入「${file.name}」(${text.length} 字)`);
+    } catch (err) {
+      appStore.toastError('导入失败: ' + err.message);
+    }
+  };
+  input.click();
+}
 
 async function generateFromNovel() {
   if (!apiStore.isConfigured) { appStore.toastError('请先配置 API Key'); return; }

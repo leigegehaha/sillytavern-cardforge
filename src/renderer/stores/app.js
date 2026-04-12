@@ -4,6 +4,7 @@ import { ref } from 'vue';
 export const useAppStore = defineStore('app', () => {
   const theme = ref('dark');
   const sidebarCollapsed = ref(false);
+  const glowEnabled = ref(true);
   const toasts = ref([]);
 
   // 自定义确认弹窗状态
@@ -38,6 +39,28 @@ export const useAppStore = defineStore('app', () => {
         theme.value = settings.theme;
         document.documentElement.setAttribute('data-theme', settings.theme);
       }
+      if (settings.glowEnabled === false) {
+        glowEnabled.value = false;
+        document.body.classList.add('no-glow');
+      }
+    } catch (e) {}
+  }
+
+  function toggleGlow() {
+    glowEnabled.value = !glowEnabled.value;
+    if (glowEnabled.value) {
+      document.body.classList.remove('no-glow');
+    } else {
+      document.body.classList.add('no-glow');
+    }
+    saveGlow();
+  }
+
+  async function saveGlow() {
+    try {
+      const settings = await window.cardForgeAPI.loadSettings() || {};
+      settings.glowEnabled = glowEnabled.value;
+      await window.cardForgeAPI.saveSettings(settings);
     } catch (e) {}
   }
 
@@ -81,9 +104,9 @@ export const useAppStore = defineStore('app', () => {
   function toastInfo(msg) { toast(msg, 'info'); }
 
   return {
-    theme, sidebarCollapsed, toasts,
+    theme, sidebarCollapsed, glowEnabled, toasts,
     confirmVisible, confirmMessage,
-    toggleTheme, setTheme, loadTheme, toggleSidebar,
+    toggleTheme, setTheme, loadTheme, toggleSidebar, toggleGlow,
     toast, toastSuccess, toastError, toastWarning, toastInfo,
     confirmAction, confirmYes, confirmNo
   };
