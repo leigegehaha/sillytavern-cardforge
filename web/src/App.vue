@@ -50,12 +50,13 @@
 
     <!-- 右侧 AI 助手抽屉 -->
     <div class="ai-drawer" :class="{ open: showDrawer }">
+      <div class="ai-drawer__niangs">
+        <button v-for="n in niangs" :key="n.id"
+          :class="['ai-drawer__niang-btn', drawerMode === n.id ? 'active' : '']"
+          :style="drawerMode === n.id ? { borderColor: n.color, color: n.color } : {}"
+          @click="drawerMode = n.id">{{ n.name }}</button>
+      </div>
       <div class="ai-drawer__header">
-        <div class="flex-row">
-          <button v-for="n in niangs" :key="n.id"
-            :class="['btn btn--sm', drawerMode === n.id ? 'btn--primary' : 'btn--ghost']"
-            @click="drawerMode = n.id">{{ n.name }}</button>
-        </div>
         <div class="flex-row">
           <button class="btn btn--sm" @click="drawerAnalyze" :disabled="drawerLoading">诊断</button>
           <button class="btn btn--accent btn--sm" @click="drawerNewChat">新对话</button>

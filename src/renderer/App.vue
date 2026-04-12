@@ -152,12 +152,15 @@
 
     <!-- 右侧 AI 助手抽屉 -->
     <div class="ai-drawer" :class="{ open: showFloatChat }">
+      <!-- 角色切换 -->
+      <div class="ai-drawer__niangs">
+        <button v-for="n in niangStore.getAllNiangs()" :key="n.id"
+          :class="['ai-drawer__niang-btn', drawerMode === n.id ? 'active' : '']"
+          :style="drawerMode === n.id ? { borderColor: n.color, color: n.color } : {}"
+          @click="drawerMode = n.id">{{ n.name }}</button>
+      </div>
+      <!-- 功能按钮 -->
       <div class="ai-drawer__header">
-        <div class="flex-row">
-          <button v-for="n in niangStore.getAllNiangs()" :key="n.id"
-            :class="['btn btn--sm', drawerMode === n.id ? 'btn--primary' : 'btn--ghost']"
-            @click="drawerMode = n.id">{{ n.name }}</button>
-        </div>
         <div class="flex-row">
           <button class="btn btn--secondary btn--sm" @click="drawerAnalyze" :disabled="floatLoading">诊断</button>
           <button class="btn btn--accent btn--sm" @click="drawerNewChat">新对话</button>
