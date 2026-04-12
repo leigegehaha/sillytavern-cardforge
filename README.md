@@ -123,6 +123,30 @@ A: 确保 `npm run build` 先执行成功再跑 electron-builder。
 **Q: 打开后白屏**
 A: 用开发模式 `npm run dev` 试试，看终端有没有报错信息。
 
+### 如何更新到最新版
+
+已经安装过的用户，不需要重新下载。打开终端，进入项目目录。
+
+拉取最新代码：
+
+```
+git pull
+```
+
+重新编译：
+
+```
+npm run build
+```
+
+重新打包：
+
+```
+npx electron-builder --win --x64 --dir
+```
+
+打包完成后在 `dist_electron/win-unpacked/` 里找到新的 exe 运行即可。你之前的配置（API Key 等）不会丢失。
+
 ---
 
 ## Live2D 模型说明 ★
