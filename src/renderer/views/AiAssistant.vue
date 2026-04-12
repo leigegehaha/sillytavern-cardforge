@@ -9,8 +9,12 @@
           :class="['btn btn--sm', mode === n.id ? 'btn--primary' : 'btn--secondary']"
           @click="mode = n.id; switchModel(n.id)">{{ n.name }}</button>
         <button class="btn btn--secondary btn--sm" @click="analyzeCard">诊断角色卡</button>
-        <button class="btn btn--ghost btn--sm" @click="showConfig = !showConfig; showModelConfig = false">设置</button>
-        <button class="btn btn--ghost btn--sm" @click="showModelConfig = !showModelConfig; showConfig = false">密钥</button>
+        <button class="btn btn--accent btn--sm" @click="startNewChat">开始新对话</button>
+        <button class="btn btn--secondary btn--sm" @click="showHistory = !showHistory; showConfig = false; showModelConfig = false">
+          对话记录 ({{ chatHistory.length }})
+        </button>
+        <button class="btn btn--ghost btn--sm" @click="showConfig = !showConfig; showModelConfig = false; showHistory = false">设置</button>
+        <button class="btn btn--ghost btn--sm" @click="showModelConfig = !showModelConfig; showConfig = false; showHistory = false">密钥</button>
       </div>
     </div>
 
@@ -91,6 +95,29 @@
       </div>
     </div>
 
+    <!-- 对话记录面板 -->
+    <div v-if="showHistory" class="card mb-md">
+      <div class="card__header flex-between">
+        <h3>对话记录</h3>
+        <span class="hint">最多保留 100 条</span>
+      </div>
+      <div class="card__body" style="max-height:400px;overflow-y:auto">
+        <div v-if="chatHistory.length === 0" class="hint" style="text-align:center;padding:20px">
+          暂无历史对话
+        </div>
+        <div v-for="(h, i) in chatHistory" :key="i" class="history-item" @click="loadHistory(i)">
+          <div class="flex-between">
+            <span class="history-item__title">{{ h.title || '无标题对话' }}</span>
+            <div class="flex-row">
+              <span class="history-item__time">{{ h.time }}</span>
+              <button class="btn btn--danger btn--sm" @click.stop="appStore.confirmAction('删除这条对话记录？', () => deleteHistory(i))">x</button>
+            </div>
+          </div>
+          <div class="history-item__preview">{{ h.preview }}</div>
+        </div>
+      </div>
+    </div>
+
     <!-- 聊天区域 -->
     <div class="card ai-chat-card">
       <div class="chat-messages" ref="messagesRef">
@@ -157,8 +184,74 @@ const messagesRef = ref(null);
 const mode = ref('youxi');
 const showConfig = ref(false);
 const showModelConfig = ref(false);
+const showHistory = ref(false);
 const showKeys = reactive({});
 let msgId = 0;
+
+// 对话历史
+const chatHistory = ref([]);
+const HISTORY_MAX = 100;
+
+async function loadChatHistory() {
+  try {
+    const settings = await window.cardForgeAPI.loadSettings();
+    chatHistory.value = settings.chatHistory || [];
+  } catch (e) {}
+}
+
+async function saveChatHistory() {
+  try {
+    const settings = await window.cardForgeAPI.loadSettings() || {};
+    settings.chatHistory = JSON.parse(JSON.stringify(chatHistory.value));
+    await window.cardForgeAPI.saveSettings(settings);
+  } catch (e) {}
+}
+
+function saveCurrentToHistory() {
+  if (messages.value.length === 0) return;
+  const firstUserMsg = messages.value.find(m => m.role === 'user');
+  const title = firstUserMsg ? firstUserMsg.content.slice(0, 30) : '无标题对话';
+  const lastMsg = messages.value[messages.value.length - 1];
+  const preview = (lastMsg.content || '').slice(0, 50);
+  const now = new Date();
+  const time = `${now.getMonth()+1}/${now.getDate()} ${now.getHours()}:${String(now.getMinutes()).padStart(2,'0')}`;
+
+  chatHistory.value.unshift({
+    title,
+    preview,
+    time,
+    messages: JSON.parse(JSON.stringify(messages.value))
+  });
+
+  if (chatHistory.value.length > HISTORY_MAX) {
+    chatHistory.value = chatHistory.value.slice(0, HISTORY_MAX);
+  }
+
+  saveChatHistory();
+}
+
+function startNewChat() {
+  saveCurrentToHistory();
+  messages.value = [];
+  appStore.toastSuccess('已开始新对话');
+}
+
+function loadHistory(index) {
+  const h = chatHistory.value[index];
+  if (!h) return;
+  // 先保存当前对话
+  saveCurrentToHistory();
+  messages.value = h.messages.map(m => ({ ...m }));
+  msgId = Math.max(0, ...messages.value.map(m => m.id || 0)) + 1;
+  showHistory.value = false;
+  appStore.toastSuccess('已加载历史对话');
+  nextTick(() => { if (messagesRef.value) messagesRef.value.scrollTop = messagesRef.value.scrollHeight; });
+}
+
+function deleteHistory(index) {
+  chatHistory.value.splice(index, 1);
+  saveChatHistory();
+}
 
 // Canvas ref (shared)
 const sharedCanvas = ref(null);
@@ -203,6 +296,7 @@ async function selectCustomModel(which) {
 
 onMounted(async () => {
   await niangStore.loadConfig();
+  await loadChatHistory();
   document.addEventListener('mousemove', onMouseMove);
   document.addEventListener('mouseup', onMouseUp);
   // 右下角（canvas 300x450，留 20px 边距）
@@ -211,6 +305,9 @@ onMounted(async () => {
 
   // 用同一个 PIXI.Application 加载两个模型
   await initBothModels();
+
+  // 关闭窗口时自动保存当前对话
+  window.addEventListener('beforeunload', () => { saveCurrentToHistory(); });
 });
 
 onUnmounted(() => {
@@ -571,6 +668,37 @@ async function sendDuo(text) {
   display: flex; gap: 8px; align-items: flex-end;
 }
 .chat-input .textarea { flex: 1; min-height: unset; resize: none; }
+
+/* ── 对话记录 ── */
+.history-item {
+  padding: 10px 12px;
+  border: 1px solid var(--cf-border);
+  border-radius: 6px;
+  margin-bottom: 8px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.history-item:hover {
+  background: rgba(255, 255, 255, 0.03);
+  border-color: rgba(255, 215, 0, 0.3);
+}
+.history-item__title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--cf-text-primary);
+}
+.history-item__time {
+  font-size: 11px;
+  color: var(--cf-text-muted);
+}
+.history-item__preview {
+  font-size: 12px;
+  color: var(--cf-text-muted);
+  margin-top: 4px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 
 /* ── 模型容器 ── */
 .model-container {

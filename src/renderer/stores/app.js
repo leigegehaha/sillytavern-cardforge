@@ -6,6 +6,11 @@ export const useAppStore = defineStore('app', () => {
   const sidebarCollapsed = ref(false);
   const toasts = ref([]);
 
+  // 自定义确认弹窗状态
+  const confirmVisible = ref(false);
+  const confirmMessage = ref('');
+  let _confirmResolve = null;
+
   function toggleTheme() {
     theme.value = theme.value === 'dark' ? 'light' : 'dark';
     document.documentElement.setAttribute('data-theme', theme.value);
@@ -50,11 +55,24 @@ export const useAppStore = defineStore('app', () => {
     }, duration);
   }
 
-  // 确认弹窗
+  // 自定义确认弹窗（不用 window.confirm，避免焦点丢失）
   function confirmAction(msg, callback) {
-    if (window.confirm(msg)) {
-      callback();
+    confirmMessage.value = msg;
+    confirmVisible.value = true;
+    _confirmResolve = callback;
+  }
+
+  function confirmYes() {
+    confirmVisible.value = false;
+    if (_confirmResolve) {
+      _confirmResolve();
+      _confirmResolve = null;
     }
+  }
+
+  function confirmNo() {
+    confirmVisible.value = false;
+    _confirmResolve = null;
   }
 
   function toastSuccess(msg) { toast(msg, 'success'); }
@@ -64,7 +82,9 @@ export const useAppStore = defineStore('app', () => {
 
   return {
     theme, sidebarCollapsed, toasts,
+    confirmVisible, confirmMessage,
     toggleTheme, setTheme, loadTheme, toggleSidebar,
-    toast, toastSuccess, toastError, toastWarning, toastInfo, confirmAction
+    toast, toastSuccess, toastError, toastWarning, toastInfo,
+    confirmAction, confirmYes, confirmNo
   };
 });

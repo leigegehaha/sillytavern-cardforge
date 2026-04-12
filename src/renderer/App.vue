@@ -129,6 +129,17 @@
       </main>
     </div>
 
+    <!-- 自定义确认弹窗 -->
+    <div v-if="appStore.confirmVisible" class="cf-confirm-overlay" @click.self="appStore.confirmNo()">
+      <div class="cf-confirm-dialog">
+        <div class="cf-confirm-msg">{{ appStore.confirmMessage }}</div>
+        <div class="cf-confirm-btns">
+          <button class="btn btn--danger" @click="appStore.confirmYes()">确认</button>
+          <button class="btn btn--secondary" @click="appStore.confirmNo()">取消</button>
+        </div>
+      </div>
+    </div>
+
     <!-- Toast 通知 -->
     <div class="toast-container">
       <div

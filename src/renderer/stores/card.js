@@ -264,11 +264,15 @@ export const useCardStore = defineStore('card', () => {
   }
 
   // World book operations
+  let _nextEntryId = 0;
+
   function addWorldEntry(entry = null) {
     const entries = card.value.data.character_book.entries;
     const maxId = entries.length > 0 ? Math.max(...entries.map(e => e.id)) + 1 : 0;
-    const newEntry = entry || createEmptyWorldEntry(maxId);
-    newEntry.id = maxId;
+    if (maxId > _nextEntryId) _nextEntryId = maxId;
+    else _nextEntryId++;
+    const newEntry = entry || createEmptyWorldEntry(_nextEntryId);
+    newEntry.id = _nextEntryId;
     if (!newEntry.extensions) newEntry.extensions = {};
     // cfSortKey 取当前最大值 + 1，新建的排在最后
     const maxKey = entries.length > 0
