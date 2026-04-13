@@ -8,7 +8,7 @@
 
 **不想折腾命令行？直接下载安装包，双击安装即可使用：**
 
-**[点击下载 CardForge v1.0.0 安装包](https://github.com/Anastasia2372/sillytavern-cardforge/releases/download/v1.0.0/SillyTavern.CardForge.Setup.1.0.0.exe)**
+**[点击下载 CardForge v2 安装包](https://github.com/Anastasia2372/sillytavern-cardforge/releases/download/v2/SillyTavern.CardForge.Setup.v2.exe)**
 
 > Windows 可能会弹出 SmartScreen 警告，点击「仍要运行」即可。
 
