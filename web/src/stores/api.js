@@ -5,8 +5,6 @@ export const useApiStore = defineStore('api', () => {
   // State
   const providers = ref([]);
   const activeProviderId = ref(null);
-  let _autoSaveLoaded = false;
-  let _saveTimer = null;
 
   // Create default providers
   function initDefaults() {
@@ -227,51 +225,48 @@ export const useApiStore = defineStore('api', () => {
     return text;
   }
 
-  // Persistence
-  async function loadFromDisk() {
+  // localStorage 持久化
+  const STORAGE_KEY = 'cardforge_api_settings';
+  let _loaded = false;
+  let _saveTimer = null;
+
+  function loadFromStorage() {
     try {
-      const settings = await window.cardForgeAPI.loadSettings();
-      if (settings.apiProviders) providers.value = settings.apiProviders;
-      if (settings.activeProviderId) activeProviderId.value = settings.activeProviderId;
+      const saved = localStorage.getItem(STORAGE_KEY);
+      if (saved) {
+        const data = JSON.parse(saved);
+        if (data.providers) providers.value = data.providers;
+        if (data.activeProviderId) activeProviderId.value = data.activeProviderId;
+      }
     } catch (e) {}
     initDefaults();
-    // 加载完成后才启动自动保存监听，避免初始化时触发写盘
-    _autoSaveLoaded = true;
+    _loaded = true;
   }
 
-  // 先读后写，不会覆盖其他 store 的字段
-  // 必须深度克隆，避免 Vue reactive proxy 通过 IPC structured clone 失败
-  async function saveToDisk() {
-    let settings = {};
+  function saveToStorage() {
     try {
-      settings = await window.cardForgeAPI.loadSettings() || {};
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({
+        providers: JSON.parse(JSON.stringify(providers.value)),
+        activeProviderId: activeProviderId.value
+      }));
     } catch (e) {}
-    settings.apiProviders = JSON.parse(JSON.stringify(providers.value));
-    settings.activeProviderId = activeProviderId.value;
-    const result = await window.cardForgeAPI.saveSettings(settings);
-    if (result && result.success === false) {
-      throw new Error(result.error || '保存失败');
-    }
   }
 
-  // debounce 自动保存（300ms）
   function scheduleSave() {
-    if (!_autoSaveLoaded) return;
+    if (!_loaded) return;
     if (_saveTimer) clearTimeout(_saveTimer);
-    _saveTimer = setTimeout(() => {
-      saveToDisk().catch(e => {
-        // 用 lazy import 避免循环依赖
-        import('./app.js').then(({ useAppStore }) => {
-          try { useAppStore().toastError('API 设置保存失败：' + e.message); } catch {}
-        });
-      });
-      _saveTimer = null;
-    }, 300);
+    _saveTimer = setTimeout(() => { saveToStorage(); _saveTimer = null; }, 300);
   }
 
-  // 监听整个 providers 数组的深度变化（包括 apiKey/baseUrl/model/enabled 等）
   watch(providers, scheduleSave, { deep: true });
   watch(activeProviderId, scheduleSave);
+
+  // 初始化时自动加载
+  loadFromStorage();
+
+  // 兼容旧接口名
+  async function loadFromDisk() { loadFromStorage(); }
+  async function saveToDisk() { saveToStorage(); }
 
   // 设置当前激活服务商
   function setActiveProvider(id) {

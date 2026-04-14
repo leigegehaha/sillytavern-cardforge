@@ -531,9 +531,9 @@ ${d.first_mes ? '\n【first_mes 内容（前500字）】\n' + d.first_mes.slice(
     let result;
     if (niang.apiKey && niang.apiBaseUrl && niang.apiModel) {
       const tempProvider = { id: 'diag_temp', type: niang.apiType || 'openai', baseUrl: niang.apiBaseUrl, apiKey: niang.apiKey, model: niang.apiModel, enabled: true };
-      result = await apiStore.chatWithProvider(tempProvider, chatMsgs, { temperature: 0.7, maxTokens: 4096 });
+      result = await apiStore.chatWithProvider(tempProvider, chatMsgs, { temperature: 0.7, maxTokens: apiStore.getModelMaxTokens(tempProvider.model) });
     } else {
-      result = await apiStore.chat(chatMsgs, { temperature: 0.7, maxTokens: 4096 });
+      result = await apiStore.chat(chatMsgs, { temperature: 0.7, maxTokens: apiStore.getModelMaxTokens(apiStore.activeProvider?.model) });
     }
 
     messages.value.push({ id: ++msgId, role: 'assistant', niangId: niang.id, name: niang.name, content: result, color: niang.color });
@@ -589,9 +589,9 @@ async function sendSingle(text, niang) {
       model: niang.apiModel,
       enabled: true
     };
-    result = await apiStore.chatWithProvider(tempProvider, chatMsgs, { temperature: 0.85, maxTokens: 1024 });
+    result = await apiStore.chatWithProvider(tempProvider, chatMsgs, { temperature: 0.85, maxTokens: apiStore.getModelMaxTokens(tempProvider.model) });
   } else {
-    result = await apiStore.chat(chatMsgs, { temperature: 0.85, maxTokens: 1024 });
+    result = await apiStore.chat(chatMsgs, { temperature: 0.85, maxTokens: apiStore.getModelMaxTokens(apiStore.activeProvider?.model) });
   }
   messages.value.push({ id: ++msgId, role: 'assistant', niangId: niang.id, name: niang.name, content: result, color: niang.color });
 }
@@ -603,7 +603,7 @@ async function sendDuo(text) {
     { role: 'system', content: sysPrompt },
     ...history.map(m => ({ role: m.role === 'user' ? 'user' : 'assistant', content: m.content }))
   ];
-  const result = await apiStore.chat(chatMsgs, { temperature: 0.9, maxTokens: 1024 });
+  const result = await apiStore.chat(chatMsgs, { temperature: 0.9, maxTokens: apiStore.getModelMaxTokens(apiStore.activeProvider?.model) });
 
   const lines = result.split('\n').filter(l => l.trim());
   const wName = niangStore.white.name;

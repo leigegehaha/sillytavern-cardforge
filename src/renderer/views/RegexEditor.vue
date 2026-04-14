@@ -238,7 +238,7 @@ ${context}
     const generated = await chatForJsonArray(apiStore, [
       { role: 'system', content: '你是正则脚本专家。只输出合法JSON数组。' },
       { role: 'user', content: prompt }
-    ], { temperature: 0.7, maxTokens: 4096 });
+    ], { temperature: 0.7, maxTokens: apiStore.getModelMaxTokens(apiStore.activeProvider?.model) });
     for (const s of generated) {
       store.addRegexScript({
         ...store.createEmptyRegexScript(),

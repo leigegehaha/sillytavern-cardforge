@@ -202,7 +202,7 @@ async function sendDrawerMsg() {
     if (context && context.length > 10) sys += '\n\n当前角色卡：\n' + context;
     const history = drawerMessages.value.filter(m => m.role === 'user' || m.niangId === n.id).slice(-10);
     const msgs = [{ role: 'system', content: sys }, ...history.map(m => ({ role: m.role === 'user' ? 'user' : 'assistant', content: m.content }))];
-    const result = await apiStore.chat(msgs, { temperature: 0.85, maxTokens: 1024 });
+    const result = await apiStore.chat(msgs, { temperature: 0.85, maxTokens: apiStore.getModelMaxTokens(apiStore.activeProvider?.model) });
     drawerMessages.value.push({ id: ++dMsgId, role: 'assistant', niangId: n.id, name: n.name, content: result, color: n.color });
   } catch (e) {
     drawerMessages.value.push({ id: ++dMsgId, role: 'assistant', name: '系统', content: '出错了: ' + e.message, color: '#f87171' });
@@ -218,7 +218,7 @@ async function drawerAnalyze() {
   scrollDrawer();
   try {
     const sys = `你是${n.name}。性格：${n.personality}\n你现在要诊断一张角色卡，从问题诊断、解决方案、优化建议、评分四个方面分析。用你的角色性格来回答。`;
-    const result = await apiStore.chat([{ role: 'system', content: sys }, { role: 'user', content: `请诊断：\n${context}` }], { temperature: 0.7, maxTokens: 4096 });
+    const result = await apiStore.chat([{ role: 'system', content: sys }, { role: 'user', content: `请诊断：\n${context}` }], { temperature: 0.7, maxTokens: apiStore.getModelMaxTokens(apiStore.activeProvider?.model) });
     drawerMessages.value.push({ id: ++dMsgId, role: 'assistant', niangId: n.id, name: n.name, content: result, color: n.color });
   } catch (e) {
     drawerMessages.value.push({ id: ++dMsgId, role: 'assistant', name: '系统', content: '诊断失败: ' + e.message, color: '#f87171' });

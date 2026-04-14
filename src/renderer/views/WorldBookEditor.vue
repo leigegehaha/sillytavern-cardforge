@@ -103,7 +103,10 @@
                 <span class="badge" :class="typeBadgeClass(result.type)">{{ result.type }}</span>
                 <span v-if="result.constant" class="badge badge--warning">常驻</span>
               </div>
-              <span class="ai-result-item__keys">{{ result.keys.join(', ') }}</span>
+              <div class="flex-row">
+                <button class="btn btn--secondary btn--sm" @click.stop="regenSingleResult(i)" :disabled="aiGenerating">重新生成</button>
+                <button class="btn btn--danger btn--sm" @click.stop="aiResults.splice(i, 1)">删除</button>
+              </div>
             </div>
             <pre class="ai-result-item__content selectable">{{ result.content }}</pre>
             <div class="ai-result-item__meta">
@@ -149,12 +152,16 @@
             </div>
           </div>
           <div v-for="(r, i) in novelResults" :key="i" class="ai-result-item" :class="{ 'ai-result-item--selected': r.selected }">
-            <div class="ai-result-item__header" @click="r.selected = !r.selected">
-              <label class="toggle-label" @click.stop>
-                <input type="checkbox" v-model="r.selected">
-              </label>
-              <span class="ai-result-item__name">{{ r.comment }}</span>
-              <span v-if="r.constant" class="badge badge--warning">常驻</span>
+            <div class="flex-between">
+              <div class="flex-row" @click="r.selected = !r.selected" style="cursor:pointer">
+                <input type="checkbox" v-model="r.selected" @click.stop style="accent-color:var(--cf-accent)">
+                <span class="ai-result-item__name">{{ r.comment }}</span>
+                <span v-if="r.constant" class="badge badge--warning">常驻</span>
+              </div>
+              <div class="flex-row">
+                <button class="btn btn--secondary btn--sm" @click.stop="regenNovelResult(i)" :disabled="novelGenerating">重新生成</button>
+                <button class="btn btn--danger btn--sm" @click.stop="novelResults.splice(i, 1)">删除</button>
+              </div>
             </div>
             <pre class="ai-result-item__content selectable">{{ r.content }}</pre>
           </div>
@@ -536,6 +543,39 @@ ${novelExtra.value ? '【额外要求】\n' + novelExtra.value + '\n' : ''}
   } finally { novelGenerating.value = false; }
 }
 
+async function regenNovelResult(index) {
+  if (!apiStore.isConfigured) { appStore.toastError('请先配置 API Key'); return; }
+  const old = novelResults.value[index];
+  if (!old) return;
+  novelGenerating.value = true;
+  try {
+    const prompt = `请重新生成以下世界书条目，保持相同的类型，但内容全新编写，更丰富详细。
+
+条目名称：${old.comment}
+关键词：${(old.keys || []).join(', ')}
+类型：${old.constant ? '常驻' : '触发'}
+
+只输出一个JSON对象：
+{ "comment": "条目名称", "keys": ["关键词"], "content": "条目内容", "constant": ${old.constant}, "position": "${old.position || 'before_char'}", "insertion_order": ${old.insertion_order || 100} }
+
+只输出JSON。`;
+
+    const result = await apiStore.chat([
+      { role: 'system', content: '你是世界书架构专家。只输出合法JSON对象。' },
+      { role: 'user', content: prompt }
+    ], { temperature: 0.8, maxTokens: apiStore.getModelMaxTokens(apiStore.activeProvider?.model) });
+
+    let cleaned = result.replace(/```(?:json)?\s*/gi, '').replace(/```/g, '').trim();
+    const match = cleaned.match(/\{[\s\S]*\}/);
+    if (!match) throw new Error('AI 返回格式异常');
+    const parsed = JSON.parse(match[0]);
+    novelResults.value[index] = { ...parsed, selected: true, keys: parsed.keys || old.keys, constant: parsed.constant ?? old.constant, position: parsed.position || 'before_char', insertion_order: parsed.insertion_order || 100 };
+    appStore.toastSuccess(`「${parsed.comment || old.comment}」已重新生成`);
+  } catch (e) {
+    appStore.toastError('重新生成失败: ' + e.message);
+  } finally { novelGenerating.value = false; }
+}
+
 function injectNovelResults() {
   const selected = novelResults.value.filter(r => r.selected);
   if (selected.length === 0) { appStore.toastWarning('请至少选中一条'); return; }
@@ -668,6 +708,52 @@ ${aiExtraReq.value ? `- 额外要求：${aiExtraReq.value}` : ''}
   } finally {
     aiGenerating.value = false;
   }
+}
+
+async function regenSingleResult(index) {
+  if (!apiStore.isConfigured) { appStore.toastError('请先配置 API Key'); return; }
+  const old = aiResults.value[index];
+  if (!old) return;
+  aiGenerating.value = true;
+  try {
+    const cardContext = buildCardContext(store);
+    const prompt = `请重新生成以下世界书条目，保持相同的类型和定位，但内容要全新编写，更加丰富详细。
+
+条目名称：${old.comment}
+关键词：${(old.keys || []).join(', ')}
+类型：${old.constant ? '常驻' : '触发'}
+插入位置：${old.position}
+
+【角色卡信息】
+${cardContext}
+
+只输出一个JSON对象（不是数组）：
+{ "comment": "条目名称", "keys": ["关键词"], "content": "条目内容", "constant": ${old.constant}, "position": "${old.position}", "insertion_order": ${old.insertion_order} }
+
+只输出JSON，不要其他文字。`;
+
+    const result = await apiStore.chat([
+      { role: 'system', content: '你是世界书架构专家。只输出合法JSON对象。' },
+      { role: 'user', content: prompt }
+    ], { temperature: 0.8, maxTokens: apiStore.getModelMaxTokens(apiStore.activeProvider?.model) });
+
+    // 解析返回的 JSON
+    let cleaned = result.replace(/```(?:json)?\s*/gi, '').replace(/```/g, '').trim();
+    const match = cleaned.match(/\{[\s\S]*\}/);
+    if (!match) throw new Error('AI 返回格式异常');
+    const parsed = JSON.parse(match[0]);
+    aiResults.value[index] = {
+      ...parsed,
+      selected: true,
+      keys: parsed.keys || old.keys,
+      constant: parsed.constant ?? old.constant,
+      position: parsed.position || old.position,
+      insertion_order: parsed.insertion_order || old.insertion_order
+    };
+    appStore.toastSuccess(`「${parsed.comment || old.comment}」已重新生成`);
+  } catch (e) {
+    appStore.toastError('重新生成失败: ' + e.message);
+  } finally { aiGenerating.value = false; }
 }
 
 async function continueGenerate() {

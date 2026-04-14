@@ -194,7 +194,11 @@ export const useCardStore = defineStore('card', () => {
               coverImageBase64.value = imageBase64 || '';
               appStore.toastSuccess('PNG 导入成功');
             } else {
-              appStore.toastError('PNG 中未找到角色卡数据');
+              // 普通PNG图片，创建空白卡并设为封面
+              newCard();
+              coverImageBase64.value = imageBase64 || '';
+              fileName.value = file.name.replace('.png', '');
+              appStore.toastSuccess('已导入为封面图片，创建了空白角色卡');
             }
           }
         } catch (err) {

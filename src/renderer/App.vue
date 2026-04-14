@@ -329,9 +329,9 @@ async function sendFloatMsg() {
     let result;
     if (niang.apiKey && niang.apiBaseUrl && niang.apiModel) {
       const p = { id: niang.id + '_d', type: niang.apiType || 'openai', baseUrl: niang.apiBaseUrl, apiKey: niang.apiKey, model: niang.apiModel, enabled: true };
-      result = await apiStore.chatWithProvider(p, chatMsgs, { temperature: 0.85, maxTokens: 1024 });
+      result = await apiStore.chatWithProvider(p, chatMsgs, { temperature: 0.85, maxTokens: apiStore.getModelMaxTokens(p.model) });
     } else {
-      result = await apiStore.chat(chatMsgs, { temperature: 0.85, maxTokens: 1024 });
+      result = await apiStore.chat(chatMsgs, { temperature: 0.85, maxTokens: apiStore.getModelMaxTokens(apiStore.activeProvider?.model) });
     }
     floatMessages.value.push({ id: ++drawerMsgId, role: 'assistant', niangId: niang.id, name: niang.name, content: result, color: niang.color });
   } catch (e) {
@@ -357,7 +357,7 @@ async function drawerAnalyze() {
     const result = await apiStore.chat([
       { role: 'system', content: sysPrompt },
       { role: 'user', content: `请诊断：\n${context}` }
-    ], { temperature: 0.7, maxTokens: 4096 });
+    ], { temperature: 0.7, maxTokens: apiStore.getModelMaxTokens(apiStore.activeProvider?.model) });
     floatMessages.value.push({ id: ++drawerMsgId, role: 'assistant', niangId: niang.id, name: niang.name, content: result, color: niang.color });
   } catch (e) {
     floatMessages.value.push({ id: ++drawerMsgId, role: 'assistant', name: '系统', content: '诊断失败: ' + e.message, color: '#f87171' });

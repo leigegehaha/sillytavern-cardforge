@@ -224,7 +224,7 @@ ${context}
     const result = await apiStore.chat([
       { role: 'system', content: '你是EJS模板专家。直接输出可用的EJS代码。' },
       { role: 'user', content: prompt }
-    ], { temperature: 0.7, maxTokens: 4096 });
+    ], { temperature: 0.7, maxTokens: apiStore.getModelMaxTokens(apiStore.activeProvider?.model) });
 
     let code = result;
     const m = result.match(/```(?:ejs|html)?\s*([\s\S]*?)```/);

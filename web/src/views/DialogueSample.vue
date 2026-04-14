@@ -187,7 +187,7 @@ ${sampleExtra.value ? '8. 额外要求：' + sampleExtra.value : ''}
     const result = await apiStore.chat([
       { role: 'system', content: '你是专业的角色卡对话样本撰写专家，擅长写出有角色特色的对话示例。' },
       { role: 'user', content: prompt }
-    ], { temperature: 0.85, maxTokens: 4096 });
+    ], { temperature: 0.85, maxTokens: apiStore.getModelMaxTokens(apiStore.activeProvider?.model) });
 
     sampleResult.value = result;
     appStore.toastSuccess('对话样本生成完成');
@@ -228,7 +228,7 @@ async function generateInterview() {
     const result = await apiStore.chat([
       { role: 'system', content: '你是专业的角色采访记者，擅长通过对话挖掘虚构角色的深层性格。' },
       { role: 'user', content: prompt }
-    ], { temperature: 0.9, maxTokens: 4096 });
+    ], { temperature: 0.9, maxTokens: apiStore.getModelMaxTokens(apiStore.activeProvider?.model) });
 
     interviewResult.value = result;
     appStore.toastSuccess('角色采访完成');

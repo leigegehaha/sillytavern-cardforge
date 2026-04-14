@@ -164,7 +164,7 @@ async function sendMessage() {
       ...messages.value.slice(-20).map(m => ({ role: m.role === 'user' ? 'user' : 'assistant', content: m.content }))
     ];
 
-    const result = await apiStore.chat(chatMessages, { temperature: 0.8, maxTokens: 4096 });
+    const result = await apiStore.chat(chatMessages, { temperature: 0.8, maxTokens: apiStore.getModelMaxTokens(apiStore.activeProvider?.model) });
     messages.value.push({ role: 'assistant', content: result });
   } catch (e) {
     messages.value.push({ role: 'assistant', content: '出错了: ' + e.message });
@@ -204,7 +204,7 @@ ${context}`;
     const result = await apiStore.chat([
       { role: 'system', content: '你是 SillyTavern 角色卡制作专家，擅长诊断和优化角色卡。请用中文回答，给出具体可操作的建议。' },
       { role: 'user', content: prompt }
-    ], { temperature: 0.7, maxTokens: 4096 });
+    ], { temperature: 0.7, maxTokens: apiStore.getModelMaxTokens(apiStore.activeProvider?.model) });
     messages.value.push({ role: 'assistant', content: result });
   } catch (e) {
     messages.value.push({ role: 'assistant', content: '诊断失败: ' + e.message });

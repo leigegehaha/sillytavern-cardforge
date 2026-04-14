@@ -217,7 +217,7 @@ ${context}
     const result = await apiStore.chat([
       { role: 'system', content: '你是专业的角色卡开场白撰写专家。直接输出开场白，不要说明。' },
       { role: 'user', content: prompt }
-    ], { temperature: 0.85, maxTokens: 4096 });
+    ], { temperature: 0.85, maxTokens: apiStore.getModelMaxTokens(apiStore.activeProvider?.model) });
 
     greetingPreview.value = result;
     lastGenMode.value = 'auto';
@@ -260,7 +260,7 @@ ${greetingExtra.value ? '- 额外要求：' + greetingExtra.value : ''}
     const result = await apiStore.chat([
       { role: 'system', content: '你是专业的角色卡开场白撰写专家。直接输出开场白，不要说明。' },
       { role: 'user', content: prompt }
-    ], { temperature: 0.85, maxTokens: 4096 });
+    ], { temperature: 0.85, maxTokens: apiStore.getModelMaxTokens(apiStore.activeProvider?.model) });
 
     greetingPreview.value = result;
     lastGenMode.value = 'custom';
@@ -311,7 +311,7 @@ ${d.value.first_mes}
     const result = await apiStore.chat([
       { role: 'system', content: '你是专业的前端设计师，擅长将纯文本转化为精美的 HTML 界面。只输出 HTML 代码。' },
       { role: 'user', content: prompt }
-    ], { temperature: 0.7, maxTokens: 4096 });
+    ], { temperature: 0.7, maxTokens: apiStore.getModelMaxTokens(apiStore.activeProvider?.model) });
 
     let html = result;
     const codeMatch = result.match(/```html?\s*([\s\S]*?)```/);
@@ -342,7 +342,7 @@ async function aiGenerateHomepage() {
     const result = await apiStore.chat([
       { role: 'system', content: '你是前端设计师。生成一个暗色系、半透明毛玻璃风格的角色卡首页HTML。只输出HTML代码。' },
       { role: 'user', content: `根据以下角色卡信息，生成一个精美的HTML首页界面。\n\n${context}\n\n要求：\n1. 暗色半透明背景、圆角卡片、渐变色\n2. 显示角色卡名称、简介、功能按钮区\n3. 所有CSS内联，不引用外部资源\n4. 宽度自适应\n5. 只输出HTML代码` }
-    ], { temperature: 0.7, maxTokens: 4096 });
+    ], { temperature: 0.7, maxTokens: apiStore.getModelMaxTokens(apiStore.activeProvider?.model) });
     let html = result;
     const m = result.match(/```html?\s*([\s\S]*?)```/);
     if (m) html = m[1];

@@ -232,7 +232,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed } from 'vue';
+import { ref, reactive, computed, watch } from 'vue';
 import { useCardStore } from '../stores/card.js';
 import { useApiStore } from '../stores/api.js';
 import { useAppStore } from '../stores/app.js';
@@ -250,7 +250,7 @@ const injectMode = ref('single');
 const namingPrefix = ref('mvu');
 const xmlWrap = ref('status');
 
-const varGroups = reactive([
+const defaultVarGroups = [
   {
     name: '世界',
     fields: [
@@ -266,7 +266,38 @@ const varGroups = reactive([
       { name: '金钱', type: 'number', defaultValue: '1000', min: 0, max: null, clamp: true, enumValues: '', recordFields: '', description: '', showAdvanced: false }
     ]
   }
-]);
+];
+
+// 从角色卡 extensions 读取已保存的 varGroups，没有则用默认值
+const varGroups = reactive([]);
+let _skipSave = false;
+
+function loadVarGroupsFromCard() {
+  _skipSave = true;
+  const saved = cardStore.cardData.extensions?.cfMvuVarGroups;
+  varGroups.length = 0;
+  const source = saved && saved.length > 0 ? saved : defaultVarGroups;
+  for (const g of source) {
+    varGroups.push(JSON.parse(JSON.stringify(g)));
+  }
+  _skipSave = false;
+}
+
+// 初始化加载
+loadVarGroupsFromCard();
+
+// 监听卡片变化（导入新卡时重新加载）
+watch(() => cardStore.cardData.name, () => {
+  loadVarGroupsFromCard();
+});
+
+// 监听 varGroups 变化，自动保存到角色卡 extensions
+watch(varGroups, () => {
+  if (_skipSave) return;
+  if (!cardStore.cardData.extensions) cardStore.cardData.extensions = {};
+  cardStore.cardData.extensions.cfMvuVarGroups = JSON.parse(JSON.stringify(varGroups));
+  cardStore.markDirty();
+}, { deep: true });
 
 function addGroup() {
   varGroups.push({ name: '新分组', fields: [] });
@@ -577,7 +608,7 @@ type 可选：number / string / boolean / enum（需填 enumValues 逗号分隔�
     const groups = await chatForJsonArray(apiStore, [
       { role: 'system', content: '你是变量系统设计专家。只输出合法JSON数组。' },
       { role: 'user', content: prompt }
-    ], { temperature: 0.7, maxTokens: 4096 });
+    ], { temperature: 0.7, maxTokens: apiStore.getModelMaxTokens(apiStore.activeProvider?.model) });
 
     varGroups.length = 0;
     for (const g of groups) {
@@ -600,7 +631,53 @@ type 可选：number / string / boolean / enum（需填 enumValues 逗号分隔�
 
 // ======== 注入脚本 ========
 
+const mvuKeywords = ['变量更新规则', '变量输出格式', '变量输出格式强调', '当前变量值', '变量初始化', 'Zod Schema', 'MVU 变量系统'];
+
+function hasExistingMvu() {
+  const entries = cardStore.worldEntries;
+  const scripts = cardStore.tavernScripts;
+  const hasEntries = entries.some(e => mvuKeywords.some(k => (e.comment || '').includes(k)));
+  const hasScripts = scripts.some(s => mvuKeywords.some(k => (s.name || '').includes(k)));
+  return hasEntries || hasScripts;
+}
+
+function removeExistingMvu() {
+  // 删除旧的 MVU 世界书条目
+  const entries = cardStore.worldEntries;
+  for (let i = entries.length - 1; i >= 0; i--) {
+    if (mvuKeywords.some(k => (entries[i].comment || '').includes(k))) {
+      cardStore.removeWorldEntry(entries[i].id);
+    }
+  }
+  // 删除旧的 MVU 酒馆脚本
+  const scripts = cardStore.tavernScripts;
+  for (let i = scripts.length - 1; i >= 0; i--) {
+    if (mvuKeywords.some(k => (scripts[i].name || '').includes(k))) {
+      cardStore.removeTavernScript(scripts[i].id);
+    }
+  }
+  // 删除旧的 MVU 正则脚本
+  const regex = cardStore.regexScripts;
+  const regexKeywords = ['去除变量更新', '仅格式思维链', '界面占位符', '变量解析', '变量加载', '变量注入'];
+  for (let i = regex.length - 1; i >= 0; i--) {
+    if (regexKeywords.some(k => (regex[i].scriptName || '').includes(k))) {
+      cardStore.removeRegexScript(regex[i].id);
+    }
+  }
+}
+
 function generateAndInject() {
+  if (hasExistingMvu()) {
+    appStore.confirmAction('已存在 MVU 变量条目，是否替换？', () => {
+      removeExistingMvu();
+      doGenerateAndInject();
+    });
+  } else {
+    doGenerateAndInject();
+  }
+}
+
+function doGenerateAndInject() {
   // 1. 生成 MVU 加载脚本
   const mvuScript = cardStore.createEmptyTavernScript();
   mvuScript.name = 'MVU 变量系统';

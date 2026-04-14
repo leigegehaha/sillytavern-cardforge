@@ -139,7 +139,7 @@ ${context}
     const scripts = await chatForJsonArray(apiStore, [
       { role: 'system', content: '你是酒馆助手脚本专家。只输出合法JSON数组。' },
       { role: 'user', content: prompt }
-    ], { temperature: 0.7, maxTokens: 4096 });
+    ], { temperature: 0.7, maxTokens: apiStore.getModelMaxTokens(apiStore.activeProvider?.model) });
     for (const s of scripts) {
       store.addTavernScript({
         ...store.createEmptyTavernScript(),
