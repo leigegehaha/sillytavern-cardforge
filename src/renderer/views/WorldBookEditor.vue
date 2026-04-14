@@ -208,6 +208,46 @@
             <button class="btn btn--secondary btn--sm" @click="wbBatchPosition('before_char')" :disabled="wbSelectedIds.size === 0">改 before_char</button>
             <button class="btn btn--secondary btn--sm" @click="wbBatchPosition('after_char')" :disabled="wbSelectedIds.size === 0">改 after_char</button>
             <button class="btn btn--danger btn--sm" @click="wbBatchDelete" :disabled="wbSelectedIds.size === 0">删除选中</button>
+            <button class="btn btn--accent btn--sm" @click="showAiRewrite = true" :disabled="wbSelectedIds.size === 0">AI 改写选中</button>
+          </div>
+
+          <!-- AI 改写面板 -->
+          <div v-if="showAiRewrite && wbSelectedIds.size > 0" class="mt-md">
+            <div class="form-group">
+              <label>改写要求</label>
+              <input class="input" v-model="aiRewriteReq" placeholder="如：更详细、改成YAML格式、补充NPC细节、精简到200字以内...">
+            </div>
+            <div class="flex-row">
+              <button class="btn btn--accent btn--sm" @click="aiRewriteSelected" :disabled="aiRewriting">
+                {{ aiRewriting ? 'AI 改写中...' : '开始改写 (' + wbSelectedIds.size + ' 条)' }}
+              </button>
+              <button class="btn btn--ghost btn--sm" @click="showAiRewrite = false">取消</button>
+            </div>
+
+            <!-- 改写结果预览 -->
+            <div v-if="aiRewriteResults.length > 0" class="mt-md">
+              <div class="flex-between mb-md">
+                <span class="badge badge--accent">改写了 {{ aiRewriteResults.length }} 条</span>
+                <div class="flex-row">
+                  <button class="btn btn--primary btn--sm" @click="applyRewriteResults">应用替换</button>
+                  <button class="btn btn--ghost btn--sm" @click="aiRewriteResults = []">丢弃</button>
+                </div>
+              </div>
+              <div v-for="(r, i) in aiRewriteResults" :key="i" class="ai-result-item mb-md">
+                <div class="flex-between">
+                  <span class="ai-result-item__name">{{ r.comment }}</span>
+                  <div class="flex-row">
+                    <button class="btn btn--secondary btn--sm" @click="regenRewriteResult(i)" :disabled="aiRewriting">重新生成</button>
+                    <button class="btn btn--danger btn--sm" @click="aiRewriteResults.splice(i, 1)">删除</button>
+                  </div>
+                </div>
+                <pre class="ai-result-item__content selectable">{{ r.newContent }}</pre>
+                <details>
+                  <summary style="font-size:11px;color:var(--cf-text-muted);cursor:pointer">查看原文</summary>
+                  <pre class="ai-result-item__content" style="opacity:0.5">{{ r.oldContent }}</pre>
+                </details>
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -1066,6 +1106,107 @@ function wbBatchDelete() {
     listVersion.value++;
     appStore.toastSuccess(`已删除 ${count} 条世界书条目`);
   });
+}
+
+// AI 改写功能
+const showAiRewrite = ref(false);
+const aiRewriteReq = ref('');
+const aiRewriting = ref(false);
+const aiRewriteResults = ref([]);
+
+async function aiRewriteSelected() {
+  if (!apiStore.isConfigured) { appStore.toastError('请先配置 API Key'); return; }
+  if (wbSelectedIds.value.size === 0) return;
+  aiRewriting.value = true;
+  aiRewriteResults.value = [];
+
+  try {
+    const selected = entries.value.filter(e => wbSelectedIds.value.has(e.id));
+    const entriesData = selected.map(e => ({
+      id: e.id,
+      comment: e.comment,
+      content: e.content,
+      keys: e.keys
+    }));
+
+    const prompt = `请根据以下要求改写这些世界书条目。保持每个条目的名称和关键词不变，只改写content内容。
+
+【改写要求】
+${aiRewriteReq.value || '优化内容，使其更加详细和生动'}
+
+【需要改写的条目】
+${entriesData.map(e => `条目名：${e.comment}\n关键词：${(e.keys || []).join(', ')}\n原内容：\n${e.content}\n---`).join('\n')}
+
+输出JSON数组，每个对象包含 comment（条目名）和 content（改写后的内容）：
+[{ "comment": "条目名", "content": "改写后的内容" }]
+
+每条content控制在500字以内。只输出JSON。`;
+
+    const parsed = await chatForJsonArray(apiStore, [
+      { role: 'system', content: '你是世界书改写专家。按照用户要求改写条目内容，保持条目名不变。只输出合法JSON数组。所有内容必须用中文，禁止英文。' },
+      { role: 'user', content: prompt }
+    ], { temperature: 0.7, maxTokens: apiStore.getModelMaxTokens(apiStore.activeProvider?.model) });
+
+    aiRewriteResults.value = parsed.map((p, i) => ({
+      id: selected[i]?.id,
+      comment: p.comment || selected[i]?.comment || '',
+      oldContent: selected[i]?.content || '',
+      newContent: p.content || ''
+    }));
+
+    appStore.toastSuccess(`已改写 ${aiRewriteResults.value.length} 条，请预览后点「应用替换」`);
+  } catch (e) {
+    appStore.toastError('AI 改写失败: ' + e.message);
+  } finally { aiRewriting.value = false; }
+}
+
+function applyRewriteResults() {
+  let count = 0;
+  for (const r of aiRewriteResults.value) {
+    const entry = entries.value.find(e => e.id === r.id);
+    if (entry) {
+      entry.content = r.newContent;
+      count++;
+    }
+  }
+  store.markDirty();
+  aiRewriteResults.value = [];
+  showAiRewrite.value = false;
+  appStore.toastSuccess(`已替换 ${count} 条世界书条目`);
+}
+
+async function regenRewriteResult(index) {
+  if (!apiStore.isConfigured) return;
+  const r = aiRewriteResults.value[index];
+  if (!r) return;
+  aiRewriting.value = true;
+  try {
+    const prompt = `请重新改写以下世界书条目。
+
+【改写要求】
+${aiRewriteReq.value || '优化内容，使其更加详细和生动'}
+
+条目名：${r.comment}
+原内容：
+${r.oldContent}
+
+只输出一个JSON对象：{ "comment": "${r.comment}", "content": "改写后的内容" }
+只输出JSON。`;
+
+    const result = await apiStore.chat([
+      { role: 'system', content: '你是世界书改写专家。只输出合法JSON对象。所有内容必须用中文，禁止英文。' },
+      { role: 'user', content: prompt }
+    ], { temperature: 0.8, maxTokens: apiStore.getModelMaxTokens(apiStore.activeProvider?.model) });
+
+    let cleaned = result.replace(/```(?:json)?\s*/gi, '').replace(/```/g, '').trim();
+    const match = cleaned.match(/\{[\s\S]*\}/);
+    if (!match) throw new Error('AI 返回格式异常');
+    const parsed = JSON.parse(match[0]);
+    aiRewriteResults.value[index] = { ...r, newContent: parsed.content || r.newContent };
+    appStore.toastSuccess(`「${r.comment}」已重新生成`);
+  } catch (e) {
+    appStore.toastError('重新生成失败: ' + e.message);
+  } finally { aiRewriting.value = false; }
 }
 
 function syncPosition(entry) {
