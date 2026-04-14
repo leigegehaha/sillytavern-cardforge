@@ -33,9 +33,25 @@ export function parseAiJsonArray(raw) {
     .replace(/\/\/[^\n]*/g, '')        // 单行注释
     .replace(/\/\*[\s\S]*?\*\//g, ''); // 多行注释
 
-  // 2. 提取最外层 [ ... ]
-  const match = text.match(/\[[\s\S]*\]/);
-  if (!match) throw new Error('AI 返回格式异常，未找到 JSON 数组');
+  // 2. 提取最外层 [ ... ]，支持截断修复
+  let match = text.match(/\[[\s\S]*\]/);
+  if (!match) {
+    // 可能 JSON 被截断，没有闭合的 ]
+    const openBracket = text.indexOf('[');
+    if (openBracket !== -1) {
+      // 尝试补全：截断到最后一个完整的 }，然后补 ]
+      let truncated = text.slice(openBracket);
+      const lastBrace = truncated.lastIndexOf('}');
+      if (lastBrace !== -1) {
+        truncated = truncated.slice(0, lastBrace + 1);
+        // 去掉末尾可能的逗号
+        truncated = truncated.replace(/,\s*$/, '');
+        truncated += ']';
+        match = [truncated];
+      }
+    }
+    if (!match) throw new Error('AI 返回格式异常，未找到 JSON 数组');
+  }
 
   let jsonStr = match[0];
 

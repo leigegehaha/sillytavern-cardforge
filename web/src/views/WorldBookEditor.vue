@@ -146,6 +146,9 @@
           <div class="flex-between mb-md">
             <span class="badge badge--accent">提取到 {{ novelResults.length }} 条</span>
             <div class="flex-row">
+              <button class="btn btn--accent btn--sm" @click="continueNovelGenerate" :disabled="novelGenerating">
+                {{ novelGenerating ? '生成中...' : '继续生成' }}
+              </button>
               <button class="btn btn--primary btn--sm" @click="injectNovelResults">注入选中条目</button>
               <button class="btn btn--ghost btn--sm" @click="novelResults.forEach(r => r.selected = true)">全选</button>
               <button class="btn btn--ghost btn--sm" @click="novelResults.forEach(r => r.selected = false)">全不选</button>
@@ -521,10 +524,11 @@ ${novelExtra.value ? '【额外要求】\n' + novelExtra.value + '\n' : ''}
 ]
 
 角色条目用关键词触发（constant=false），世界观规则用常驻（constant=true）。
+注意：每次最多生成10条，宁可少生成也不要截断。每条content控制在300字以内。
 只输出 JSON 数组，不要其他文字。`;
 
     const parsed = await chatForJsonArray(apiStore, [
-      { role: 'system', content: '你是世界书架构专家，擅长从小说文本中提取世界观设定。只输出合法JSON数组。' },
+      { role: 'system', content: '你是世界书架构专家，擅长从小说文本中提取世界观设定。只输出合法JSON数组。所有内容必须用中文，禁止英文。' },
       { role: 'user', content: prompt }
     ], { temperature: 0.7, maxTokens: apiStore.getModelMaxTokens(apiStore.activeProvider?.model) });
 
@@ -561,7 +565,7 @@ async function regenNovelResult(index) {
 只输出JSON。`;
 
     const result = await apiStore.chat([
-      { role: 'system', content: '你是世界书架构专家。只输出合法JSON对象。' },
+      { role: 'system', content: '你是世界书架构专家。只输出合法JSON对象。所有内容必须用中文，禁止英文。' },
       { role: 'user', content: prompt }
     ], { temperature: 0.8, maxTokens: apiStore.getModelMaxTokens(apiStore.activeProvider?.model) });
 
@@ -573,6 +577,44 @@ async function regenNovelResult(index) {
     appStore.toastSuccess(`「${parsed.comment || old.comment}」已重新生成`);
   } catch (e) {
     appStore.toastError('重新生成失败: ' + e.message);
+  } finally { novelGenerating.value = false; }
+}
+
+async function continueNovelGenerate() {
+  if (!apiStore.isConfigured) { appStore.toastError('请先配置 API Key'); return; }
+  if (!novelText.value.trim()) return;
+  novelGenerating.value = true;
+
+  try {
+    const existing = novelResults.value.map(r => r.comment).join('、');
+    const textPreview = novelText.value.slice(0, 8000);
+    const prompt = `继续从以下小说文本中提取世界观设定，生成世界书条目。
+
+已经提取的条目：${existing}
+
+请生成更多未覆盖的条目（角色、地点、规则、组织等），不要重复已有的。
+
+【小说文本】
+${textPreview}
+
+${novelExtra.value ? '【额外要求】\n' + novelExtra.value + '\n' : ''}
+
+输出 JSON 数组格式，同之前。每次最多生成10条，每条content控制在300字以内。只输出JSON。`;
+
+    const parsed = await chatForJsonArray(apiStore, [
+      { role: 'system', content: '你是世界书架构专家。继续提取条目，不要重复。只输出合法JSON数组。所有内容必须用中文，禁止英文。' },
+      { role: 'user', content: prompt }
+    ], { temperature: 0.7, maxTokens: apiStore.getModelMaxTokens(apiStore.activeProvider?.model) });
+
+    const newItems = parsed.map(item => ({
+      ...item, selected: true,
+      keys: item.keys || [], constant: item.constant ?? false,
+      position: item.position || 'before_char', insertion_order: item.insertion_order || 100
+    }));
+    novelResults.value.push(...newItems);
+    appStore.toastSuccess(`又提取了 ${newItems.length} 条，共 ${novelResults.value.length} 条`);
+  } catch (e) {
+    appStore.toastError('继续生成失败: ' + e.message);
   } finally { novelGenerating.value = false; }
 }
 
@@ -687,10 +729,10 @@ ${aiExtraReq.value ? `- 额外要求：${aiExtraReq.value}` : ''}
   }
 ]
 
-只输出JSON数组，不要其他文字。`;
+只输出JSON数组，不要其他文字。每次最多生成10条，每条content控制在300字以内，宁可少生成也不要截断JSON。`;
 
     const parsed = await chatForJsonArray(apiStore, [
-      { role: 'system', content: '你是SillyTavern世界书架构专家。精通世界书条目的分类、关键词设计、insertion_order分层策略。始终输出合法JSON。' },
+      { role: 'system', content: '你是SillyTavern世界书架构专家。精通世界书条目的分类、关键词设计、insertion_order分层策略。始终输出合法JSON。所有内容必须用中文，禁止英文。' },
       { role: 'user', content: prompt }
     ], { temperature: 0.7, maxTokens: apiStore.getModelMaxTokens(apiStore.activeProvider?.model) });
     aiResults.value = parsed.map(item => ({
@@ -733,7 +775,7 @@ ${cardContext}
 只输出JSON，不要其他文字。`;
 
     const result = await apiStore.chat([
-      { role: 'system', content: '你是世界书架构专家。只输出合法JSON对象。' },
+      { role: 'system', content: '你是世界书架构专家。只输出合法JSON对象。所有内容必须用中文，禁止英文。' },
       { role: 'user', content: prompt }
     ], { temperature: 0.8, maxTokens: apiStore.getModelMaxTokens(apiStore.activeProvider?.model) });
 
@@ -776,7 +818,7 @@ ${aiWorldDesc.value}
 输出JSON数组格式，同之前。只输出JSON。`;
 
     const newItems = (await chatForJsonArray(apiStore, [
-      { role: 'system', content: '你是世界书架构专家。继续补充条目，不要重复。只输出JSON。' },
+      { role: 'system', content: '你是世界书架构专家。继续补充条目，不要重复。只输出JSON。所有内容必须用中文，禁止英文。' },
       { role: 'user', content: prompt }
     ], { temperature: 0.7, maxTokens: apiStore.getModelMaxTokens(apiStore.activeProvider?.model) })).map(item => ({
       ...item, selected: true,

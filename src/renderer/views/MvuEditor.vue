@@ -276,11 +276,113 @@ function loadVarGroupsFromCard() {
   _skipSave = true;
   const saved = cardStore.cardData.extensions?.cfMvuVarGroups;
   varGroups.length = 0;
-  const source = saved && saved.length > 0 ? saved : defaultVarGroups;
-  for (const g of source) {
-    varGroups.push(JSON.parse(JSON.stringify(g)));
+
+  if (saved && saved.length > 0) {
+    // 有保存过的变量组，直接加载
+    for (const g of saved) varGroups.push(JSON.parse(JSON.stringify(g)));
+  } else {
+    // 没有保存过，尝试从世界书条目中解析
+    const parsed = parseVarGroupsFromWorldBook();
+    if (parsed.length > 0) {
+      for (const g of parsed) varGroups.push(g);
+    } else {
+      for (const g of defaultVarGroups) varGroups.push(JSON.parse(JSON.stringify(g)));
+    }
   }
   _skipSave = false;
+}
+
+function parseVarGroupsFromWorldBook() {
+  const entries = cardStore.worldEntries;
+  const groups = [];
+
+  // 方式1：从分组变量条目解析（如 "[mvu_update]世界变量" 内容含 format_message_variable::stat_data.世界）
+  for (const e of entries) {
+    const content = e.content || '';
+    const comment = e.comment || '';
+    // 匹配 format_message_variable::stat_data.组名 或 get_message_variable::stat_data.组名
+    const groupMatch = content.match(/(?:format_message_variable|get_message_variable)::stat_data\.(\S+)/);
+    if (groupMatch) {
+      const groupName = groupMatch[1].replace(/[{}]/g, '');
+      if (!groups.find(g => g.name === groupName)) {
+        groups.push({ name: groupName, fields: [] });
+      }
+    }
+  }
+
+  // 方式2：从initvar/变量初始化条目解析变量名
+  for (const e of entries) {
+    const comment = (e.comment || '').toLowerCase();
+    if (comment.includes('initvar') || comment.includes('变量初始化') || comment.includes('初始变量')) {
+      const content = e.content || '';
+      // 解析 YAML 风格的变量定义
+      const lines = content.split('\n');
+      let currentGroup = null;
+      for (const line of lines) {
+        const trimmed = line.trim();
+        if (!trimmed || trimmed.startsWith('#') || trimmed.startsWith('<') || trimmed.startsWith('{')) continue;
+        // 顶级键（无缩进或少缩进）= 分组名
+        const groupMatch = line.match(/^(\S+)\s*[:：]/);
+        if (groupMatch && !line.startsWith(' ') && !line.startsWith('\t')) {
+          const name = groupMatch[1].replace(/['"]/g, '');
+          currentGroup = groups.find(g => g.name === name);
+          if (!currentGroup) {
+            currentGroup = { name, fields: [] };
+            groups.push(currentGroup);
+          }
+          continue;
+        }
+        // 子级键（有缩进）= 变量名
+        if (currentGroup) {
+          const fieldMatch = trimmed.match(/^(\S+)\s*[:：]\s*(.*)/);
+          if (fieldMatch) {
+            const fieldName = fieldMatch[1].replace(/['"]/g, '');
+            const defaultVal = (fieldMatch[2] || '').replace(/['"]/g, '').trim();
+            if (!currentGroup.fields.find(f => f.name === fieldName)) {
+              const isNum = !isNaN(defaultVal) && defaultVal !== '';
+              currentGroup.fields.push({
+                name: fieldName, type: isNum ? 'number' : 'string',
+                defaultValue: defaultVal || '', min: null, max: null,
+                clamp: false, enumValues: '', recordFields: '',
+                description: '', showAdvanced: false
+              });
+            }
+          }
+        }
+      }
+      break; // 只解析第一个匹配的初始化条目
+    }
+  }
+
+  // 方式3：从变量更新规则条目解析变量名（备选）
+  if (groups.length === 0) {
+    for (const e of entries) {
+      const comment = (e.comment || '').toLowerCase();
+      if (comment.includes('变量更新规则') || comment.includes('mvu_update')) {
+        const content = e.content || '';
+        // 匹配 YAML 格式的顶级键
+        const lines = content.split('\n');
+        let currentGroup = null;
+        for (const line of lines) {
+          const trimmed = line.trim();
+          if (!trimmed || trimmed.startsWith('-') || trimmed.startsWith('#') || trimmed.startsWith('<')) continue;
+          const topKey = line.match(/^  (\S+)\s*[:：]/);
+          if (topKey) {
+            const name = topKey[1].replace(/['"]/g, '');
+            if (['rule', 'format', 'check', 'type', 'op', 'path', 'value'].includes(name.toLowerCase())) continue;
+            currentGroup = groups.find(g => g.name === name);
+            if (!currentGroup) {
+              currentGroup = { name, fields: [] };
+              groups.push(currentGroup);
+            }
+          }
+        }
+        if (groups.length > 0) break;
+      }
+    }
+  }
+
+  return groups;
 }
 
 // 初始化加载

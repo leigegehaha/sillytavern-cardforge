@@ -61,34 +61,38 @@
       <div class="card__body">
         <p class="hint mb-md">为每个角色配置独立的 AI 模型，留空则使用全局 API 设置</p>
         <div v-for="n in niangStore.getAllNiangs()" :key="n.id" class="model-config-item mb-md">
-          <h4 :style="{ color: n.color }">{{ n.name }}</h4>
-          <div class="grid-2">
-            <div class="form-group">
-              <label>API 类型</label>
-              <select class="select" v-model="n.apiType">
-                <option value="openai">OpenAI 兼容</option>
-                <option value="claude">Claude (Anthropic)</option>
-                <option value="gemini">Gemini (Google)</option>
-              </select>
-            </div>
-            <div class="form-group">
-              <label>Base URL</label>
-              <input class="input" v-model="n.apiBaseUrl" placeholder="留空跟随全局">
-            </div>
-          </div>
-          <div class="grid-2">
-            <div class="form-group">
-              <label>API Key</label>
-              <div class="flex-row">
-                <input :type="showKeys[n.id] ? 'text' : 'password'" class="input flex-1" v-model="n.apiKey" placeholder="留空跟随全局">
-                <button class="btn btn--ghost btn--sm" @click="showKeys[n.id] = !showKeys[n.id]">
-                  {{ showKeys[n.id] ? '隐藏' : '显示' }}
-                </button>
+          <h4 :style="{ color: n.color, cursor: 'pointer' }" @click="modelConfigExpand[n.id] = !modelConfigExpand[n.id]">
+            {{ modelConfigExpand[n.id] ? '▼' : '▶' }} {{ n.name }}
+          </h4>
+          <div v-if="modelConfigExpand[n.id]">
+            <div class="grid-2">
+              <div class="form-group">
+                <label>API 类型</label>
+                <select class="select" v-model="n.apiType">
+                  <option value="openai">OpenAI 兼容</option>
+                  <option value="claude">Claude (Anthropic)</option>
+                  <option value="gemini">Gemini (Google)</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label>Base URL</label>
+                <input class="input" v-model="n.apiBaseUrl" placeholder="留空跟随全局">
               </div>
             </div>
-            <div class="form-group">
-              <label>模型名称</label>
-              <input class="input" v-model="n.apiModel" placeholder="如 gpt-4o, claude-sonnet-4-20250514">
+            <div class="grid-2">
+              <div class="form-group">
+                <label>API Key</label>
+                <div class="flex-row">
+                  <input :type="showKeys[n.id] ? 'text' : 'password'" class="input flex-1" v-model="n.apiKey" placeholder="留空跟随全局">
+                  <button class="btn btn--ghost btn--sm" @click="showKeys[n.id] = !showKeys[n.id]">
+                    {{ showKeys[n.id] ? '隐藏' : '显示' }}
+                  </button>
+                </div>
+              </div>
+              <div class="form-group">
+                <label>模型名称</label>
+                <input class="input" v-model="n.apiModel" placeholder="如 gpt-4o, claude-sonnet-4-20250514">
+              </div>
             </div>
           </div>
         </div>
@@ -186,6 +190,7 @@ const showConfig = ref(false);
 const showModelConfig = ref(false);
 const showHistory = ref(false);
 const showKeys = reactive({});
+const modelConfigExpand = reactive({});
 let msgId = 0;
 
 // 对话历史
