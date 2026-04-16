@@ -2,6 +2,7 @@ const { app, BrowserWindow, ipcMain, dialog, shell } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const logger = require('./logger');
+const { autoUpdater } = require('electron-updater');
 
 const isDev = process.env.NODE_ENV === 'development';
 
@@ -9,6 +10,72 @@ const isDev = process.env.NODE_ENV === 'development';
 logger.installGlobalHandlers();
 
 let mainWindow;
+
+// ============ 自动更新 ============
+autoUpdater.autoDownload = false;          // 让用户先确认再下载
+autoUpdater.autoInstallOnAppQuit = true;   // 下载后退出时自动安装
+autoUpdater.logger = {
+  info: () => {},
+  warn: () => {},
+  error: (msg) => logger.logError('main', 'updater', String(msg)),
+  debug: () => {}
+};
+
+autoUpdater.on('update-available', (info) => {
+  if (!mainWindow) return;
+  dialog.showMessageBox(mainWindow, {
+    type: 'info',
+    title: 'CardForge 有新版本',
+    message: `发现新版本 ${info.version}（当前 ${app.getVersion()}）`,
+    detail: '是否立即下载？下载会在后台进行，完成后再询问是否重启安装。',
+    buttons: ['立即下载', '稍后再说'],
+    defaultId: 0,
+    cancelId: 1
+  }).then(result => {
+    if (result.response === 0) {
+      autoUpdater.downloadUpdate().catch(err => {
+        logger.logError('main', 'updater-download', err && err.message, err && err.stack);
+      });
+    }
+  });
+});
+
+autoUpdater.on('update-downloaded', (info) => {
+  if (!mainWindow) return;
+  dialog.showMessageBox(mainWindow, {
+    type: 'info',
+    title: '下载完成',
+    message: `新版本 ${info.version} 已下载完成`,
+    detail: '是否立即重启安装？也可以选稍后，退出软件时会自动安装。',
+    buttons: ['立即重启安装', '稍后'],
+    defaultId: 0,
+    cancelId: 1
+  }).then(result => {
+    if (result.response === 0) {
+      autoUpdater.quitAndInstall();
+    }
+  });
+});
+
+autoUpdater.on('error', (err) => {
+  logger.logError('main', 'updater-error', err && err.message, err && err.stack);
+});
+
+function checkForUpdates(silent) {
+  if (isDev) return Promise.resolve({ skipped: 'dev' });
+  return autoUpdater.checkForUpdates().catch(err => {
+    logger.logError('main', 'updater-check', err && err.message, err && err.stack);
+    if (!silent && mainWindow) {
+      dialog.showMessageBox(mainWindow, {
+        type: 'error',
+        title: '检查更新失败',
+        message: '无法连接到更新服务器',
+        detail: err && err.message ? err.message : '请检查网络后重试。'
+      });
+    }
+    return { error: err };
+  });
+}
 
 function createWindow() {
   mainWindow = new BrowserWindow({
@@ -58,7 +125,11 @@ function createWindow() {
   });
 }
 
-app.whenReady().then(createWindow);
+app.whenReady().then(() => {
+  createWindow();
+  // 启动 5 秒后静默检查更新（不打扰启动流程）
+  setTimeout(() => checkForUpdates(true), 5000);
+});
 
 app.on('window-all-closed', () => {
   app.quit();
@@ -295,6 +366,27 @@ ipcMain.handle('app:getResourcePath', () => {
   }
   return process.resourcesPath;
 });
+
+// ============ Auto Update IPC ============
+ipcMain.handle('update:check', async () => {
+  try {
+    const result = await checkForUpdates(false);
+    if (result && result.skipped === 'dev') {
+      return { success: true, skipped: 'dev', message: '开发环境跳过更新检查' };
+    }
+    if (result && result.error) {
+      return { success: false, error: result.error.message };
+    }
+    if (result && result.updateInfo) {
+      return { success: true, version: result.updateInfo.version, current: app.getVersion() };
+    }
+    return { success: true, current: app.getVersion() };
+  } catch (e) {
+    return { success: false, error: e.message };
+  }
+});
+
+ipcMain.handle('update:getVersion', () => app.getVersion());
 
 // ============ Error Log IPC ============
 ipcMain.handle('log:read', async () => {

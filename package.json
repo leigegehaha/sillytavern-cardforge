@@ -1,6 +1,6 @@
 {
   "name": "sillytavern-cardforge",
-  "version": "3.0.0",
+  "version": "4.0.0",
   "description": "SillyTavern 角色卡锻造炉 - 全功能角色卡制作工具",
   "main": "src/main/main.js",
   "scripts": {
@@ -27,19 +27,32 @@
       }
     ],
     "win": {
-      "target": ["nsis", "dir"],
+      "target": [
+        "nsis",
+        "dir"
+      ],
       "icon": "public/icon.ico",
       "signAndEditExecutable": false
     },
     "nsis": {
       "oneClick": false,
       "allowToChangeInstallationDirectory": true,
-      "installerLanguages": ["zh_CN"],
+      "installerLanguages": [
+        "zh_CN"
+      ],
       "language": "2052",
       "installerIcon": "public/icon.ico",
       "uninstallerIcon": "public/icon.ico",
-      "shortcutName": "CardForge"
+      "shortcutName": "CardForge",
+      "artifactName": "CardForge-Setup.exe"
     },
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "Anastasia2372",
+        "repo": "sillytavern-cardforge"
+      }
+    ],
     "asar": true
   },
   "keywords": [
@@ -61,6 +74,7 @@
   },
   "type": "commonjs",
   "dependencies": {
+    "electron-updater": "^6.8.3",
     "png-chunk-text": "^1.0.0",
     "png-chunks-encode": "^1.0.0",
     "png-chunks-extract": "^1.0.0"

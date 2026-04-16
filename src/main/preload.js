@@ -38,5 +38,9 @@ contextBridge.exposeInMainWorld('cardForgeAPI', {
   readErrorLog: () => ipcRenderer.invoke('log:read'),
   appendErrorLog: (entry) => ipcRenderer.invoke('log:append', entry),
   clearErrorLog: () => ipcRenderer.invoke('log:clear'),
-  openLogFolder: () => ipcRenderer.invoke('log:openFolder')
+  openLogFolder: () => ipcRenderer.invoke('log:openFolder'),
+
+  // Auto update
+  checkForUpdates: () => ipcRenderer.invoke('update:check'),
+  getAppVersion: () => ipcRenderer.invoke('update:getVersion')
 });

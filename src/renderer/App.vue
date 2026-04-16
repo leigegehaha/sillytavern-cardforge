@@ -26,7 +26,7 @@
         <div class="sidebar__logo">
           <div class="sidebar__logo-text" style="font-size:15px">
             角色卡锻造炉
-            <span class="sub">v3.0</span>
+            <span class="sub">v4.0</span>
           </div>
         </div>
 
@@ -126,6 +126,9 @@
             </div>
             <div class="sidebar__item" style="cursor:pointer" @click="showErrorLog = true">
               <span class="sidebar__item-icon">·</span> 错误日志
+            </div>
+            <div class="sidebar__item" style="cursor:pointer" @click="checkUpdate" :class="{ disabled: checkingUpdate }">
+              <span class="sidebar__item-icon">·</span> {{ checkingUpdate ? '检查中...' : '检查更新' }}
             </div>
           </div>
         </nav>
@@ -251,6 +254,30 @@ const niangStore = useAiNiangStore();
 
 // 错误日志弹窗
 const showErrorLog = ref(false);
+
+// 检查更新
+const checkingUpdate = ref(false);
+async function checkUpdate() {
+  if (checkingUpdate.value) return;
+  checkingUpdate.value = true;
+  try {
+    const res = await window.cardForgeAPI.checkForUpdates();
+    if (!res.success) {
+      appStore.toastError('检查失败：' + (res.error || '未知错误'));
+    } else if (res.skipped === 'dev') {
+      appStore.toastInfo(res.message);
+    } else if (res.version && res.version !== res.current) {
+      // 主进程已经会弹原生 dialog，这里不重复
+      appStore.toastInfo(`发现新版本 ${res.version}`);
+    } else {
+      appStore.toastSuccess(`已是最新版本（${res.current || ''}）`);
+    }
+  } catch (e) {
+    appStore.toastError('检查失败：' + e.message);
+  } finally {
+    checkingUpdate.value = false;
+  }
+}
 
 // AI 助手抽屉
 const showFloatChat = ref(false);

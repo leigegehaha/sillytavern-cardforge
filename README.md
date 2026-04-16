@@ -8,7 +8,9 @@
 
 **不想折腾命令行？直接下载安装包，双击安装即可使用：**
 
-**[点击下载 CardForge v3 安装包](https://github.com/Anastasia2372/sillytavern-cardforge/releases/download/v3/SillyTavern.CardForge.Setup.v3.exe)**
+**[点击下载最新版 CardForge 安装包](https://github.com/Anastasia2372/sillytavern-cardforge/releases/latest/download/CardForge-Setup.exe)**
+
+> 安装后软件会在启动 5 秒后自动检查更新，发现新版会弹窗询问是否下载。也可在「设置 → 检查更新」手动触发。
 
 > Windows 可能会弹出 SmartScreen 警告，点击「仍要运行」即可。
 
