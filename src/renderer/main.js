@@ -2,6 +2,10 @@ import { createApp } from 'vue';
 import { createPinia } from 'pinia';
 import { createRouter, createWebHashHistory } from 'vue-router';
 import App from './App.vue';
+import errorLogger from './utils/error-logger.js';
+
+// 在所有代码运行前安装错误捕获
+errorLogger.install();
 
 // Views
 import Dashboard from './views/Dashboard.vue';
@@ -53,6 +57,13 @@ const router = createRouter({
 });
 
 const app = createApp(App);
+app.config.errorHandler = (err, instance, info) => {
+  errorLogger.logVueError(err, instance, info);
+  // 同时打到控制台便于调试（patchConsoleError 会再记一次但 type 不同）
+  if (typeof console !== 'undefined' && console.warn) {
+    console.warn('[Vue Error]', err);
+  }
+};
 app.use(createPinia());
 app.use(router);
 app.mount('#app');

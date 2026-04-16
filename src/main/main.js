@@ -1,8 +1,12 @@
 const { app, BrowserWindow, ipcMain, dialog, shell } = require('electron');
 const path = require('path');
 const fs = require('fs');
+const logger = require('./logger');
 
 const isDev = process.env.NODE_ENV === 'development';
+
+// 主进程全局错误捕获 — 必须在 app.whenReady 之前注册
+logger.installGlobalHandlers();
 
 let mainWindow;
 
@@ -290,4 +294,36 @@ ipcMain.handle('app:getResourcePath', () => {
     return path.join(__dirname, '../../public');
   }
   return process.resourcesPath;
+});
+
+// ============ Error Log IPC ============
+ipcMain.handle('log:read', async () => {
+  try {
+    return { success: true, entries: logger.readAll(), dir: logger.getLogDir() };
+  } catch (e) {
+    return { success: false, error: e.message };
+  }
+});
+
+ipcMain.handle('log:append', async (event, entry) => {
+  try {
+    const e = entry || {};
+    logger.logError(e.source || 'renderer', e.type || 'manual', e.message || '', e.stack || '', e.extra || null);
+    return { success: true };
+  } catch (err) {
+    return { success: false, error: err.message };
+  }
+});
+
+ipcMain.handle('log:clear', async () => {
+  try {
+    logger.clear();
+    return { success: true };
+  } catch (e) {
+    return { success: false, error: e.message };
+  }
+});
+
+ipcMain.handle('log:openFolder', async () => {
+  return logger.openLogFolder();
 });

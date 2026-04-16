@@ -2,7 +2,10 @@ import { createApp } from 'vue';
 import { createPinia } from 'pinia';
 import { createRouter, createWebHashHistory } from 'vue-router';
 import App from './App.vue';
+import errorLogger from './utils/error-logger.js';
 import './styles/global.css';
+
+errorLogger.install();
 
 const routes = [
   { path: '/', redirect: '/basic' },
@@ -35,6 +38,12 @@ const router = createRouter({
 });
 
 const app = createApp(App);
+app.config.errorHandler = (err, instance, info) => {
+  errorLogger.logVueError(err, instance, info);
+  if (typeof console !== 'undefined' && console.warn) {
+    console.warn('[Vue Error]', err);
+  }
+};
 app.use(createPinia());
 app.use(router);
 app.mount('#app');

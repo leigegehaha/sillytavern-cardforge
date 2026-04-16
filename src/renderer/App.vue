@@ -26,7 +26,7 @@
         <div class="sidebar__logo">
           <div class="sidebar__logo-text" style="font-size:15px">
             角色卡锻造炉
-            <span class="sub">v1.0</span>
+            <span class="sub">v3.0</span>
           </div>
         </div>
 
@@ -124,6 +124,9 @@
                 {{ appStore.glowEnabled ? '开' : '关' }}
               </span>
             </div>
+            <div class="sidebar__item" style="cursor:pointer" @click="showErrorLog = true">
+              <span class="sidebar__item-icon">·</span> 错误日志
+            </div>
           </div>
         </nav>
 
@@ -138,6 +141,9 @@
         </router-view>
       </main>
     </div>
+
+    <!-- 错误日志弹窗 -->
+    <ErrorLogModal :visible="showErrorLog" @close="showErrorLog = false" />
 
     <!-- 自定义确认弹窗 -->
     <div v-if="appStore.confirmVisible" class="cf-confirm-overlay" @click.self="appStore.confirmNo()">
@@ -235,12 +241,16 @@ import { useAppStore } from './stores/app.js';
 import { useAiNiangStore } from './stores/ainiang.js';
 import { buildCardContext } from './utils/card-context.js';
 import wallpaperDataUrl from './wallpaper-data.js';
+import ErrorLogModal from './components/ErrorLogModal.vue';
 
 const api = window.cardForgeAPI;
 const cardStore = useCardStore();
 const apiStore = useApiStore();
 const appStore = useAppStore();
 const niangStore = useAiNiangStore();
+
+// 错误日志弹窗
+const showErrorLog = ref(false);
 
 // AI 助手抽屉
 const showFloatChat = ref(false);

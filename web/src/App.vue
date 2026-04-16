@@ -23,12 +23,19 @@
 
         <template v-for="section in navSections" :key="section.title">
           <div class="sidebar__section">{{ section.title }}</div>
-          <router-link v-for="link in section.links" :key="link.path"
-            :to="link.path" class="sidebar__link"
-            :class="{ active: $route.path === link.path }"
-            @click="sidebarOpen = false">
-            {{ link.label }}
-          </router-link>
+          <template v-for="(link, idx) in section.links" :key="link.path || link.action || idx">
+            <router-link v-if="link.path"
+              :to="link.path" class="sidebar__link"
+              :class="{ active: $route.path === link.path }"
+              @click="sidebarOpen = false">
+              {{ link.label }}
+            </router-link>
+            <button v-else-if="link.action === 'errorLog'"
+              class="sidebar__link"
+              @click="showErrorLog = true; sidebarOpen = false">
+              {{ link.label }}
+            </button>
+          </template>
         </template>
       </nav>
       <div class="sidebar__footer">
@@ -100,6 +107,9 @@
       {{ showDrawer ? '>' : 'AI' }}
     </button>
 
+    <!-- 错误日志弹窗 -->
+    <ErrorLogModal :visible="showErrorLog" @close="showErrorLog = false" />
+
     <!-- 自定义确认弹窗 -->
     <div v-if="appStore.confirmVisible" class="cf-confirm-overlay" @click.self="appStore.confirmNo()">
       <div class="cf-confirm-dialog">
@@ -127,11 +137,13 @@ import { useCardStore } from './stores/card.js';
 import { useApiStore } from './stores/api.js';
 import { useAppStore } from './stores/app.js';
 import { buildCardContext } from './utils/card-context.js';
+import ErrorLogModal from './components/ErrorLogModal.vue';
 
 const cardStore = useCardStore();
 const apiStore = useApiStore();
 const appStore = useAppStore();
 const sidebarOpen = ref(false);
+const showErrorLog = ref(false);
 
 // AI 助手抽屉
 const niangs = [
@@ -259,6 +271,7 @@ const navSections = [
   ]},
   { title: '设置', links: [
     { path: '/api', label: 'API 设置' },
+    { action: 'errorLog', label: '错误日志' },
   ]},
 ];
 const navLinks = navSections.flatMap(s => s.links);

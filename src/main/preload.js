@@ -32,5 +32,11 @@ contextBridge.exposeInMainWorld('cardForgeAPI', {
   openExternal: (url) => ipcRenderer.send('shell:openExternal', url),
 
   // App paths
-  getResourcePath: () => ipcRenderer.invoke('app:getResourcePath')
+  getResourcePath: () => ipcRenderer.invoke('app:getResourcePath'),
+
+  // Error log
+  readErrorLog: () => ipcRenderer.invoke('log:read'),
+  appendErrorLog: (entry) => ipcRenderer.invoke('log:append', entry),
+  clearErrorLog: () => ipcRenderer.invoke('log:clear'),
+  openLogFolder: () => ipcRenderer.invoke('log:openFolder')
 });
