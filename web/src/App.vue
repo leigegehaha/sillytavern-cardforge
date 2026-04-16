@@ -171,8 +171,19 @@ function loadDrawerHistory() {
 function saveDrawerHistory() {
   try { localStorage.setItem(DRAWER_HISTORY_KEY, JSON.stringify(drawerHistory.value)); } catch (e) {}
 }
+function isSameDrawerMessages(a, b) {
+  if (!Array.isArray(a) || !Array.isArray(b) || a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i++) {
+    if ((a[i].role || '') !== (b[i].role || '')) return false;
+    if ((a[i].content || '') !== (b[i].content || '')) return false;
+  }
+  return true;
+}
+
 function saveDrawerToHistory() {
   if (drawerMessages.value.length === 0) return;
+  // 防重复：当前 messages 和历史里某条完全一致就不再保存（修复载入历史后再载入会复制的 bug）
+  if (drawerHistory.value.some(h => isSameDrawerMessages(h.messages, drawerMessages.value))) return;
   const first = drawerMessages.value.find(m => m.role === 'user');
   const last = drawerMessages.value[drawerMessages.value.length - 1];
   const now = new Date();

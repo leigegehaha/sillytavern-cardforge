@@ -6,7 +6,7 @@
     </div>
 
     <!-- 快捷操作 -->
-    <div class="grid-3 mb-md">
+    <div class="grid-2 mb-md">
       <div class="dash-action" @click="handleNew" style="position:relative">
           <div class="dash-action__icon"></div>
         <div class="dash-action__title">新建角色卡</div>
@@ -17,12 +17,21 @@
         <div class="dash-action__title">导入角色卡</div>
         <div class="dash-action__desc">打开 PNG 或 JSON 文件</div>
       </div>
+    </div>
+    <div class="grid-2 mb-md">
       <div class="dash-action" @click="$router.push('/npc')" style="position:relative">
           <div class="dash-action__icon"></div>
         <div class="dash-action__title">NPC 生成器</div>
         <div class="dash-action__desc">用 AI 快速生成角色</div>
       </div>
+      <div class="dash-action" @click="showAssetImport = true" style="position:relative">
+          <div class="dash-action__icon"></div>
+        <div class="dash-action__title">从其他卡导入资产</div>
+        <div class="dash-action__desc">挑选其他卡的世界书 / MVU / 正则 / 脚本融合到当前卡</div>
+      </div>
     </div>
+
+    <AssetImportModal :visible="showAssetImport" @close="showAssetImport = false" />
 
     <!-- 当前卡片信息 -->
     <div class="card" v-if="cardStore.cardData.name" style="position:relative">
@@ -114,14 +123,17 @@
 </template>
 
 <script setup>
+import { ref } from 'vue';
 import { useRouter } from 'vue-router';
 import { useCardStore } from '../stores/card.js';
 import { useAppStore } from '../stores/app.js';
+import AssetImportModal from '../components/AssetImportModal.vue';
 
 const router = useRouter();
 const cardStore = useCardStore();
 const appStore = useAppStore();
 const api = window.cardForgeAPI;
+const showAssetImport = ref(false);
 
 function handleNew() {
   cardStore.newCard();

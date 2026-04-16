@@ -6,11 +6,15 @@
         <p>管理角色卡的世界书条目 — 当前 {{ entries.length }} 条</p>
       </div>
       <div class="flex-row">
-        <button class="btn btn--secondary btn--sm" @click="showAiPanel = !showAiPanel; showNovelPanel = false">
+        <button class="btn btn--secondary btn--sm" @click="showAiPanel = !showAiPanel; showNovelPanel = false; showRefNovelPanel = false">
           {{ showAiPanel ? '关闭AI生成' : 'AI 生成条目' }}
         </button>
-        <button class="btn btn--accent btn--sm" @click="showNovelPanel = !showNovelPanel; showAiPanel = false">
+        <button class="btn btn--accent btn--sm" @click="showNovelPanel = !showNovelPanel; showAiPanel = false; showRefNovelPanel = false">
           {{ showNovelPanel ? '关闭' : '小说转世界书' }}
+        </button>
+        <button class="btn btn--secondary btn--sm" @click="showRefNovelPanel = !showRefNovelPanel; showAiPanel = false; showNovelPanel = false"
+          :class="{ 'btn--accent': refNovel.length > 0 }">
+          参考小说{{ refNovel.length > 0 ? ' ✓' : '' }}
         </button>
         <button class="btn btn--secondary btn--sm" @click="handleFilter">
           {{ filterText ? '清除筛选' : '筛选' }}
@@ -168,6 +172,29 @@
             </div>
             <pre class="ai-result-item__content selectable">{{ r.content }}</pre>
           </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 参考小说面板 -->
+    <div v-if="showRefNovelPanel" class="card mb-md">
+      <div class="card__header">
+        <h3>参考小说</h3>
+        <span class="badge badge--info">这段小说会自动加入「AI 生成条目」「AI 改写选中」等所有 AI 操作的上下文</span>
+      </div>
+      <div class="card__body">
+        <p class="hint mb-md">把一段小说作为这张卡的"参考素材"。它会跟着卡片一起保存（导入/导出 PNG 时一起带），AI 生成或改写世界书条目时，会在 prompt 里附上这段小说，让 AI 参考它的风格、世界观、人物关系。</p>
+        <div class="form-group">
+          <div class="flex-between" style="margin-bottom:4px">
+            <label>小说文本</label>
+            <div class="flex-row">
+              <button class="btn btn--secondary btn--sm" @click="importRefNovelFile">导入 txt 文件</button>
+              <button class="btn btn--ghost btn--sm" @click="refNovel = ''" :disabled="!refNovel">清空</button>
+            </div>
+          </div>
+          <textarea class="textarea" v-model="refNovel" rows="14"
+            placeholder="粘贴一段小说作为参考素材，AI 在生成或改写条目时会参考它"></textarea>
+          <div class="hint">{{ (refNovel || '').length }} 字{{ refNovel.length > 30000 ? '（过长可能让 AI 反应变慢或被截断，建议 ≤ 30000 字）' : '' }}</div>
         </div>
       </div>
     </div>
@@ -511,6 +538,41 @@ const novelExtra = ref('');
 const novelGenerating = ref(false);
 const novelResults = ref([]);
 
+// 参考小说（持久化到 cardData.extensions.cfReferenceNovel，跟着卡走）
+const showRefNovelPanel = ref(false);
+const refNovel = computed({
+  get() { return store.cardData.extensions?.cfReferenceNovel || ''; },
+  set(v) {
+    if (!store.cardData.extensions) store.cardData.extensions = {};
+    store.cardData.extensions.cfReferenceNovel = v;
+    store.markDirty();
+  }
+});
+
+function importRefNovelFile() {
+  const input = document.createElement('input');
+  input.type = 'file';
+  input.accept = '.txt,.text,.md';
+  input.onchange = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    try {
+      const text = await file.text();
+      refNovel.value = text;
+      appStore.toastSuccess(`已导入「${file.name}」(${text.length} 字)`);
+    } catch (err) {
+      appStore.toastError('导入失败: ' + err.message);
+    }
+  };
+  input.click();
+}
+
+function buildRefNovelSegment() {
+  const novel = (store.cardData.extensions?.cfReferenceNovel || '').trim();
+  if (!novel) return '';
+  return `\n\n## 参考小说素材（按它的世界观、人物风格、笔法来生成 / 改写）\n\n${novel}`;
+}
+
 function importNovelFile() {
   const input = document.createElement('input');
   input.type = 'file';
@@ -769,7 +831,7 @@ ${aiExtraReq.value ? `- 额外要求：${aiExtraReq.value}` : ''}
   }
 ]
 
-只输出JSON数组，不要其他文字。每次最多生成10条，每条content控制在300字以内，宁可少生成也不要截断JSON。`;
+只输出JSON数组，不要其他文字。每次最多生成10条，每条content控制在300字以内，宁可少生成也不要截断JSON。${buildRefNovelSegment()}`;
 
     const parsed = await chatForJsonArray(apiStore, [
       { role: 'system', content: '你是SillyTavern世界书架构专家。精通世界书条目的分类、关键词设计、insertion_order分层策略。始终输出合法JSON。所有内容必须用中文，禁止英文。' },
@@ -812,7 +874,7 @@ ${cardContext}
 只输出一个JSON对象（不是数组）：
 { "comment": "条目名称", "keys": ["关键词"], "content": "条目内容", "constant": ${old.constant}, "position": "${old.position}", "insertion_order": ${old.insertion_order} }
 
-只输出JSON，不要其他文字。`;
+只输出JSON，不要其他文字。${buildRefNovelSegment()}`;
 
     const result = await apiStore.chat([
       { role: 'system', content: '你是世界书架构专家。只输出合法JSON对象。所有内容必须用中文，禁止英文。' },
@@ -855,7 +917,7 @@ ${cardContext}
 ${aiWorldDesc.value}
 
 请生成更多未覆盖的条目（NPC、地点、事件等），不要重复已有的。
-输出JSON数组格式，同之前。只输出JSON。`;
+输出JSON数组格式，同之前。只输出JSON。${buildRefNovelSegment()}`;
 
     const newItems = (await chatForJsonArray(apiStore, [
       { role: 'system', content: '你是世界书架构专家。继续补充条目，不要重复。只输出JSON。所有内容必须用中文，禁止英文。' },
@@ -1140,7 +1202,7 @@ ${entriesData.map(e => `条目名：${e.comment}\n关键词：${(e.keys || []).j
 输出JSON数组，每个对象包含 comment（条目名）和 content（改写后的内容）：
 [{ "comment": "条目名", "content": "改写后的内容" }]
 
-每条content控制在500字以内。只输出JSON。`;
+每条content控制在500字以内。只输出JSON。${buildRefNovelSegment()}`;
 
     const parsed = await chatForJsonArray(apiStore, [
       { role: 'system', content: '你是世界书改写专家。按照用户要求改写条目内容，保持条目名不变。只输出合法JSON数组。所有内容必须用中文，禁止英文。' },
@@ -1191,7 +1253,7 @@ ${aiRewriteReq.value || '优化内容，使其更加详细和生动'}
 ${r.oldContent}
 
 只输出一个JSON对象：{ "comment": "${r.comment}", "content": "改写后的内容" }
-只输出JSON。`;
+只输出JSON。${buildRefNovelSegment()}`;
 
     const result = await apiStore.chat([
       { role: 'system', content: '你是世界书改写专家。只输出合法JSON对象。所有内容必须用中文，禁止英文。' },

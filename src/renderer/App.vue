@@ -26,7 +26,7 @@
         <div class="sidebar__logo">
           <div class="sidebar__logo-text" style="font-size:15px">
             角色卡锻造炉
-            <span class="sub">v4.0</span>
+            <span class="sub">v5.0</span>
           </div>
         </div>
 
@@ -315,8 +315,19 @@ async function saveDrawerHistory() {
   } catch (e) {}
 }
 
+function isSameDrawerMessages(a, b) {
+  if (!Array.isArray(a) || !Array.isArray(b) || a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i++) {
+    if ((a[i].role || '') !== (b[i].role || '')) return false;
+    if ((a[i].content || '') !== (b[i].content || '')) return false;
+  }
+  return true;
+}
+
 function saveDrawerToHistory() {
   if (floatMessages.value.length === 0) return;
+  // 防重复：当前 messages 和历史里某条完全一致就不再保存（修复载入历史后再载入会复制的 bug）
+  if (drawerHistory.value.some(h => isSameDrawerMessages(h.messages, floatMessages.value))) return;
   const firstUser = floatMessages.value.find(m => m.role === 'user');
   const title = firstUser ? firstUser.content.slice(0, 30) : '无标题';
   const last = floatMessages.value[floatMessages.value.length - 1];
