@@ -1,5 +1,6 @@
 import { defineStore } from 'pinia';
 import { ref } from 'vue';
+import errorLogger from '../utils/error-logger.js';
 
 export const useAppStore = defineStore('app', () => {
   const theme = ref('dark');
@@ -99,8 +100,8 @@ export const useAppStore = defineStore('app', () => {
   }
 
   function toastSuccess(msg) { toast(msg, 'success'); }
-  function toastError(msg) { toast(msg, 'error', 5000); }
-  function toastWarning(msg) { toast(msg, 'warning'); }
+  function toastError(msg) { toast(msg, 'error', 5000); errorLogger.logManual(msg, { level: 'error' }); }
+  function toastWarning(msg) { toast(msg, 'warning'); errorLogger.logManual(msg, { level: 'warning' }); }
   function toastInfo(msg) { toast(msg, 'info'); }
 
   return {

@@ -116,11 +116,42 @@
                 <span v-if="result.constant" class="badge badge--warning">常驻</span>
               </div>
               <div class="flex-row">
+                <button class="btn btn--ghost btn--sm" @click.stop="result._editing = !result._editing">{{ result._editing ? '收起' : '编辑' }}</button>
                 <button class="btn btn--secondary btn--sm" @click.stop="regenSingleResult(i)" :disabled="aiGenerating">重新生成</button>
                 <button class="btn btn--danger btn--sm" @click.stop="aiResults.splice(i, 1)">删除</button>
               </div>
             </div>
-            <pre class="ai-result-item__content selectable">{{ result.content }}</pre>
+            <!-- 编辑模式 -->
+            <div v-if="result._editing" class="ai-result-edit">
+              <div class="form-group">
+                <label>名称</label>
+                <input class="input" v-model="result.comment">
+              </div>
+              <div class="form-group">
+                <label>关键词（逗号分隔）</label>
+                <input class="input" :value="(result.keys||[]).join(', ')" @input="result.keys = $event.target.value.split(/[,，]\s*/).filter(Boolean)">
+              </div>
+              <div class="form-group">
+                <label>内容</label>
+                <textarea class="textarea" v-model="result.content" rows="8" style="font-size:12px;line-height:1.6"></textarea>
+              </div>
+              <div class="grid-2">
+                <div class="form-group">
+                  <label>位置</label>
+                  <select class="select" v-model="result.position">
+                    <option value="before_char">before_char</option>
+                    <option value="after_char">after_char</option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label>插入顺序</label>
+                  <input class="input" type="number" v-model.number="result.insertion_order">
+                </div>
+              </div>
+              <label class="toggle-label"><input type="checkbox" v-model="result.constant"> 常驻</label>
+            </div>
+            <!-- 预览模式 -->
+            <pre v-else class="ai-result-item__content selectable">{{ result.content }}</pre>
             <div class="ai-result-item__meta">
               {{ result.position }} | order {{ result.insertion_order }} | {{ result.content.length }} 字符
             </div>
@@ -802,7 +833,7 @@ function injectNovelResults() {
 // AI 生成相关
 const showAiPanel = ref(false);
 const aiWorldDesc = ref('');
-const aiEntryTypes = ref(['system', 'world', 'npc', 'location', 'event', 'format']);
+const aiEntryTypes = ref(['system', 'world', 'location', 'event']);
 const aiTargetCount = ref('small');
 const aiDescStyle = ref('auto');
 const aiExtraReq = ref('');
@@ -815,10 +846,8 @@ const aiBatchProgress = computed(() => aiBatchTotal.value > 0 ? Math.round((aiBa
 const entryTypeOpts = [
   { value: 'system', label: '系统规则' },
   { value: 'world', label: '世界设定' },
-  { value: 'npc', label: 'NPC 角色' },
   { value: 'location', label: '地点场景' },
-  { value: 'event', label: '事件规则' },
-  { value: 'format', label: '输出格式' }
+  { value: 'event', label: '事件规则' }
 ];
 
 const allSelected = computed(() => aiResults.value.length > 0 && aiResults.value.every(r => r.selected));
@@ -859,8 +888,9 @@ async function handleAiGenerate() {
 
     // Parse target count range to determine batch count
     const targetMatch = targetRange.match(/(\d+)\s*[-~]\s*(\d+)/);
+    const targetMin = targetMatch ? parseInt(targetMatch[1]) : 5;
     const targetMax = targetMatch ? parseInt(targetMatch[2]) : 15;
-    const perBatch = 15; // Each batch generates up to 15 entries
+    const perBatch = 8;
     const totalBatches = Math.max(1, Math.ceil(targetMax / perBatch));
 
     aiBatchTotal.value = totalBatches;
@@ -883,35 +913,49 @@ ${aiWorldDesc.value}
 - 输出格式（constant=true）：告诉AI按什么格式回复。insertion_order=9990-9999，position=after_char
 
 ## 输出格式
-严格输出 JSON 数组：
-[{"comment":"条目名称","type":"类型","keys":["关键词"],"content":"内容","constant":bool,"position":"before_char或after_char","insertion_order":数字}]
+严格输出 JSON 数组，每次只生成 ${perBatch} 条，确保 JSON 完整不截断：
+[{"comment":"条目名称","type":"类型","keys":["关键词"],"content":"内容（控制在200字以内）","constant":bool,"position":"before_char或after_char","insertion_order":数字}]
 只输出JSON数组，不要其他文字。${buildRefNovelSegment()}`;
 
     for (let batch = 0; batch < totalBatches; batch++) {
+      // Delay between batches to avoid rate limiting
+      if (batch > 0) await new Promise(r => setTimeout(r, 5000));
       aiBatchCurrent.value = batch + 1;
+
+      // Early stop: reached 80% of target
+      if (aiResults.value.length >= targetMin && aiResults.value.length >= targetMax * 0.8) {
+        appStore.toastSuccess(`已达到目标数量，提前完成`);
+        break;
+      }
 
       const existingNames = aiResults.value.map(r => r.comment).join('、');
       const batchPrompt = batch === 0
-        ? `${basePrompt}\n\n## 生成要求\n- 条目类型：${typeLabels.join('、')}\n- 内容风格：${styleMap[aiDescStyle.value]}\n${aiExtraReq.value ? `- 额外要求：${aiExtraReq.value}\n` : ''}- 本批生成约 ${perBatch} 条，覆盖最重要的设定`
-        : `${basePrompt}\n\n## 生成要求\n- 条目类型：${typeLabels.join('、')}\n- 内容风格：${styleMap[aiDescStyle.value]}\n${aiExtraReq.value ? `- 额外要求：${aiExtraReq.value}\n` : ''}- 已生成的条目：${existingNames}\n- 请生成更多未覆盖的条目，不要重复已有的\n- 本批生成约 ${perBatch} 条`;
+        ? `${basePrompt}\n\n## 生成要求\n- 条目类型：${typeLabels.join('、')}\n- 内容风格：${styleMap[aiDescStyle.value]}\n${aiExtraReq.value ? `- 额外要求：${aiExtraReq.value}\n` : ''}- 本批生成 ${perBatch} 条，覆盖最重要的设定`
+        : `${basePrompt}\n\n## 生成要求\n- 条目类型：${typeLabels.join('、')}\n- 内容风格：${styleMap[aiDescStyle.value]}\n${aiExtraReq.value ? `- 额外要求：${aiExtraReq.value}\n` : ''}- 已生成的条目：${existingNames}\n- 请生成更多未覆盖的条目，不要重复已有的\n- 本批生成 ${perBatch} 条`;
 
       try {
         const parsed = await chatForJsonArray(apiStore, [
-          { role: 'system', content: '你是SillyTavern世界书架构专家。始终输出合法JSON。所有内容必须用中文，禁止英文。' },
+          { role: 'system', content: '你是SillyTavern世界书架构专家。始终输出合法JSON。所有内容必须用中文，禁止英文。每次严格只生成' + perBatch + '条，确保JSON完整。' },
           { role: 'user', content: batchPrompt }
         ], { temperature: 0.7, maxTokens: apiStore.getModelMaxTokens(apiStore.activeProvider?.model) });
 
-        const newItems = parsed.map(item => ({
-          ...item,
-          selected: true,
-          keys: item.keys || [],
-          constant: item.constant ?? false,
-          position: item.position || 'before_char',
-          insertion_order: item.insertion_order || 100
-        }));
-        aiResults.value.push(...newItems);
+        if (parsed.length === 0) {
+          appStore.toastWarning(`第 ${batch + 1} 批未生成有效条目，停止生成`);
+          break;
+        } else {
+          const newItems = parsed.map(item => ({
+            ...item,
+            selected: true,
+            keys: item.keys || [],
+            constant: item.constant ?? false,
+            position: item.position || 'before_char',
+            insertion_order: item.insertion_order || 100
+          }));
+          aiResults.value.push(...newItems);
+        }
       } catch (e) {
-        appStore.toastWarning(`第 ${batch + 1} 批生成出错: ${e.message}，继续下一批...`);
+        appStore.toastWarning(`第 ${batch + 1} 批生成出错: ${e.message}`);
+        break;
       }
     }
 
@@ -1418,6 +1462,17 @@ function syncPosition(entry) {
   overflow-y: auto;
 }
 .ai-result-item__meta {
+  font-size: 11px;
+  color: var(--cf-text-muted);
+}
+.ai-result-edit {
+  padding: 10px 0;
+  border-top: 1px solid rgba(255, 255, 255, 0.04);
+}
+.ai-result-edit .form-group {
+  margin-bottom: 8px;
+}
+.ai-result-edit label {
   font-size: 11px;
   color: var(--cf-text-muted);
 }

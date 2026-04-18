@@ -40,8 +40,17 @@
       <div class="card__header"><h3>状态栏配置</h3></div>
       <div class="card__body">
         <div class="form-group">
+          <label>状态栏模式</label>
+          <select class="select" v-model="statusMode">
+            <option value="mvu">MVU 变量模式 — 读取 MVU 变量系统的实时数据（需先配置 MVU）</option>
+            <option value="text">纯文本模式 — AI 每次回复末尾输出状态文本，状态栏从文本中解析渲染（无需 MVU）</option>
+          </select>
+          <div class="hint">{{ statusMode === 'mvu' ? '状态栏从 getAllVariables().stat_data 读取变量值，需要先在 MVU 页面定义变量。' : '状态栏从 AI 输出的 <StatusData> 标签内容解析，AI 每次回复末尾按指定格式输出状态值，不需要 MVU 变量系统。' }}</div>
+        </div>
+
+        <div class="form-group">
           <label>视觉风格</label>
-          <div class="form-row">
+          <div class="grid-3">
             <label class="style-card" :class="{ active: style === 'modern' }" @click="style = 'modern'">
               <input type="radio" v-model="style" value="modern" hidden>
               <strong>现代极简</strong>
@@ -103,8 +112,8 @@
       <div class="card__header flex-between">
         <h3>生成预览</h3>
         <div class="flex-row">
-          <button class="btn btn--accent" @click="applyStatusBar">应用到正则脚本</button>
-          <button class="btn btn--accent" @click="regenerate" :disabled="generating">
+          <button class="btn-gold" @click="applyStatusBar">应用到正则脚本</button>
+          <button class="btn-gold btn-gold--regen" @click="regenerate" :disabled="generating">
             {{ generating ? '生成中...' : '重新生成' }}
           </button>
         </div>
@@ -137,6 +146,7 @@ const cardStore = useCardStore();
 const apiStore = useApiStore();
 const appStore = useAppStore();
 
+const statusMode = ref('mvu');
 const style = ref('modern');
 const layout = ref('vertical');
 const extraReq = ref('');
@@ -180,13 +190,68 @@ const layoutDescriptions = {
 
 async function generateStatusBar() {
   if (!apiStore.isConfigured) { appStore.toastError('请先配置 API Key'); return; }
-  if (!hasMvu.value) { appStore.toastError('请先在 MVU 页面定义变量'); return; }
+  if (statusMode.value === 'mvu' && !hasMvu.value) { appStore.toastError('请先在 MVU 页面定义变量，或切换为纯文本模式'); return; }
 
   generating.value = true;
   try {
     const SCRIPT_OPEN = '<' + 'script type="module">';
     const SCRIPT_CLOSE = '<' + '/script>';
-    const prompt = [
+    const isTextMode = statusMode.value === 'text';
+    const cardContext = buildCardContext(cardStore);
+    const prompt = isTextMode ? [
+      '你是 SillyTavern 前端状态栏开发专家。生成一段纯 HTML+CSS+JS 代码，作为角色卡的状态栏。',
+      '',
+      '【角色卡信息】',
+      cardContext,
+      '',
+      '【工作原理】',
+      '这个状态栏不使用 MVU 变量系统。它的数据来源是正则捕获组 $1。',
+      'AI 每次回复末尾会输出 <StatusData>字段名:值\\n字段名:值</StatusData>',
+      '正则脚本会匹配 <StatusData>(内容)</StatusData>，将 $1（捕获的文本）传入你的 HTML 替换模板。',
+      '',
+      '【设计要求】',
+      '- 视觉风格：' + styleDescriptions[style.value],
+      '- 布局：' + layoutDescriptions[layout.value],
+      extraReq.value ? '- 额外要求：' + extraReq.value : '',
+      '',
+      '【关键技术要求】',
+      '1. 用 ```html 代码块包裹',
+      '2. 包含 <body> 标签和 <div id="st-panel">',
+      '3. 预填合理的示例数据（根据角色卡信息编造）',
+      '4. 用一段普通 <script>（不是module）解析 $1 传入的文本',
+      '5. 解析逻辑：文本按换行分割，每行按第一个冒号分割为 key:value',
+      '6. 用解析出的数据覆盖 #st-panel 的内容',
+      '7. 不需要引入任何外部 JS 库（不用 MVU API、不用 jQuery）',
+      '8. 数据通过 window.__statusRawText 全局变量传入（正则替换时会设置这个值）',
+      '9. 所有CSS用内联style或<style>标签',
+      '',
+      '【参考结构】',
+      '```html',
+      '<body>',
+      '<style>.panel{} .row{} .label{color:#aaa} .value{font-weight:bold}</style>',
+      '<div id="st-panel" class="panel">',
+      '  <div class="row"><span class="label">位置</span><span class="value">某处</span></div>',
+      '</div>',
+      '<' + 'script>',
+      'try{',
+      '  const raw=window.__statusRawText||"";',
+      '  const lines=raw.trim().split("\\n").filter(Boolean);',
+      '  const data={};',
+      '  lines.forEach(l=>{const i=l.indexOf(":");if(i>0)data[l.slice(0,i).trim()]=l.slice(i+1).trim();});',
+      '  if(Object.keys(data).length>0){',
+      '    let h="";',
+      '    for(const[k,v]of Object.entries(data)){',
+      '      h+=\'<div class="row"><span class="label">\'+k+\'</span><span class="value">\'+v+\'</span></div>\';',
+      '    }',
+      '    document.getElementById("st-panel").innerHTML=h;',
+      '  }',
+      '}catch(e){}',
+      '<' + '/script>',
+      '</body>',
+      '```',
+      '',
+      '直接输出完整代码，不要任何说明文字。'
+    ].join('\n') : [
       '你是 SillyTavern 前端状态栏开发专家。生成一段 HTML+JavaScript 代码，作为角色卡的状态栏。',
       '',
       '【MVU 变量结构】',
@@ -343,58 +408,113 @@ function applyStatusBar() {
 function doApplyStatusBar() {
   // 先删除已有的状态栏正则
   const scripts = cardStore.regexScripts;
+  const allStatusNames = [...statusBarScriptNames, '对AI隐藏状态数据', '状态栏'];
   for (let i = scripts.length - 1; i >= 0; i--) {
-    if (statusBarScriptNames.includes(scripts[i].scriptName)) {
+    if (allStatusNames.includes(scripts[i].scriptName)) {
       cardStore.removeRegexScript(scripts[i].id);
     }
   }
 
-  // 1. 渲染正则
-  cardStore.addRegexScript({
-    ...cardStore.createEmptyRegexScript(),
-    scriptName: '前端状态栏渲染',
-    findRegex: '/<StatusPlaceHolderImpl\\s*\\/>/g',
-    replaceString: generatedHtml.value,
-    markdownOnly: true,
-    promptOnly: false,
-    maxDepth: 2
-  });
+  if (statusMode.value === 'text') {
+    // 纯文本模式：用 <StatusData> 标签
+    // 1. 渲染正则：匹配 <StatusData>内容</StatusData>，$1传入HTML
+    // 在HTML里注入一段script设置 window.__statusRawText = $1 的内容
+    let textHtml = generatedHtml.value;
+    // 在 </body> 前插入数据注入脚本
+    textHtml = textHtml.replace('</body>', '<' + 'script>window.__statusRawText=`$1`;<' + '/script>\n</body>');
+    cardStore.addRegexScript({
+      ...cardStore.createEmptyRegexScript(),
+      scriptName: '状态栏',
+      findRegex: '/<StatusData>([\\s\\S]*?)<\\/StatusData>/gm',
+      replaceString: textHtml,
+      markdownOnly: true,
+      promptOnly: false,
+      maxDepth: 2
+    });
 
-  // 2. AI 层隐藏占位符
-  cardStore.addRegexScript({
-    ...cardStore.createEmptyRegexScript(),
-    scriptName: '[隐藏]状态栏占位符',
-    findRegex: '/<StatusPlaceHolderImpl\\s*\\/>/g',
-    replaceString: '',
-    markdownOnly: false,
-    promptOnly: true
-  });
+    // 2. 对AI隐藏旧的状态数据
+    cardStore.addRegexScript({
+      ...cardStore.createEmptyRegexScript(),
+      scriptName: '对AI隐藏状态数据',
+      findRegex: '/<StatusData>[\\s\\S]*?<\\/StatusData>/gm',
+      replaceString: '',
+      markdownOnly: false,
+      promptOnly: true,
+      minDepth: 6
+    });
 
-  // 3. 旧楼层清理
-  cardStore.addRegexScript({
-    ...cardStore.createEmptyRegexScript(),
-    scriptName: '[清理]旧楼层状态栏',
-    findRegex: '/<StatusPlaceHolderImpl\\s*\\/>/g',
-    replaceString: '',
-    markdownOnly: true,
-    promptOnly: false,
-    minDepth: 3
-  });
+    // 3. 旧楼层清理
+    cardStore.addRegexScript({
+      ...cardStore.createEmptyRegexScript(),
+      scriptName: '[清理]旧楼层状态栏',
+      findRegex: '/<StatusData>[\\s\\S]*?<\\/StatusData>/gm',
+      replaceString: '',
+      markdownOnly: true,
+      promptOnly: false,
+      minDepth: 3
+    });
 
-  // 4. 给开场白追加占位符
-  const firstMes = cardStore.cardData.first_mes || '';
-  if (!firstMes.includes('StatusPlaceHolderImpl')) {
-    cardStore.cardData.first_mes = firstMes + '\n<StatusPlaceHolderImpl/>';
-  }
-  for (let i = 0; i < (cardStore.cardData.alternate_greetings || []).length; i++) {
-    if (!cardStore.cardData.alternate_greetings[i].includes('StatusPlaceHolderImpl')) {
-      cardStore.cardData.alternate_greetings[i] += '\n<StatusPlaceHolderImpl/>';
+    // 4. 添加世界书条目告诉AI输出<StatusData>
+    const existingStatusEntry = cardStore.worldEntries.find(e => (e.comment || '').includes('状态数据输出指令'));
+    if (!existingStatusEntry) {
+      const entry = cardStore.addWorldEntry();
+      entry.comment = '状态数据输出指令';
+      entry.content = `状态数据输出规则:\n  - 每次回复结束后，必须在末尾追加 <StatusData> 块\n  - 格式为每行一个 "字段名:值"，冒号后紧跟值\n  - 不要在 <StatusData> 块内添加额外格式\n  - <StatusData> 块的内容不要出现在正文中\n\n输出格式示例:\n  <StatusData>\n  位置:某个地方\n  状态:正常\n  </StatusData>`;
+      entry.constant = true;
+      entry.enabled = true;
+      entry.position = 'after_char';
+      entry.insertion_order = 200;
+      entry.extensions.depth = 0;
     }
-  }
 
-  cardStore.markDirty();
-  generatedHtml.value = '';
-  appStore.toastSuccess('状态栏已应用：3个正则 + 开场白占位符');
+    cardStore.markDirty();
+    generatedHtml.value = '';
+    appStore.toastSuccess('纯文本状态栏已应用：2个正则 + 状态数据输出指令');
+  } else {
+    // MVU 模式：用 <StatusPlaceHolderImpl/>
+    cardStore.addRegexScript({
+      ...cardStore.createEmptyRegexScript(),
+      scriptName: '前端状态栏渲染',
+      findRegex: '/<StatusPlaceHolderImpl\\s*\\/>/g',
+      replaceString: generatedHtml.value,
+      markdownOnly: true,
+      promptOnly: false,
+      maxDepth: 2
+    });
+
+    cardStore.addRegexScript({
+      ...cardStore.createEmptyRegexScript(),
+      scriptName: '[隐藏]状态栏占位符',
+      findRegex: '/<StatusPlaceHolderImpl\\s*\\/>/g',
+      replaceString: '',
+      markdownOnly: false,
+      promptOnly: true
+    });
+
+    cardStore.addRegexScript({
+      ...cardStore.createEmptyRegexScript(),
+      scriptName: '[清理]旧楼层状态栏',
+      findRegex: '/<StatusPlaceHolderImpl\\s*\\/>/g',
+      replaceString: '',
+      markdownOnly: true,
+      promptOnly: false,
+      minDepth: 3
+    });
+
+    const firstMes = cardStore.cardData.first_mes || '';
+    if (!firstMes.includes('StatusPlaceHolderImpl')) {
+      cardStore.cardData.first_mes = firstMes + '\n<StatusPlaceHolderImpl/>';
+    }
+    for (let i = 0; i < (cardStore.cardData.alternate_greetings || []).length; i++) {
+      if (!cardStore.cardData.alternate_greetings[i].includes('StatusPlaceHolderImpl')) {
+        cardStore.cardData.alternate_greetings[i] += '\n<StatusPlaceHolderImpl/>';
+      }
+    }
+
+    cardStore.markDirty();
+    generatedHtml.value = '';
+    appStore.toastSuccess('状态栏已应用：3个正则 + 开场白占位符');
+  }
 }
 </script>
 
