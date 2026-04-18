@@ -1,7 +1,12 @@
 import { defineStore } from 'pinia';
-import { ref, computed } from 'vue';
+import { ref, computed, watch } from 'vue';
 import { useAppStore } from './app.js';
 import { readPngCardData, writePngCardData } from '../utils/png-utils.js';
+
+const AUTOSAVE_KEY = 'cardforge_autosave';
+const AUTOSAVE_COVER_KEY = 'cardforge_autosave_cover';
+const AUTOSAVE_NAME_KEY = 'cardforge_autosave_name';
+const AUTOSAVE_DEBOUNCE = 3000;
 
 function createEmptyCard() {
   return {
@@ -119,8 +124,12 @@ export const useCardStore = defineStore('card', () => {
   const tavernScripts = computed(() => {
     const helper = card.value.data.extensions?.tavern_helper;
     if (!helper) return [];
-    if (Array.isArray(helper.scripts)) return helper.scripts;
-    return [];
+    const scripts = Array.isArray(helper.scripts) ? helper.scripts : [];
+    for (const s of scripts) {
+      if (!s.button) s.button = { enabled: false, buttons: [] };
+      if (!Array.isArray(s.button.buttons)) s.button.buttons = [];
+    }
+    return scripts;
   });
   const cardName = computed(() => card.value.data.name || fileName.value || '');
 
@@ -242,6 +251,63 @@ export const useCardStore = defineStore('card', () => {
     isDirty.value = true;
   }
 
+  // --- Auto-save to localStorage ---
+  let autosaveTimer = null;
+  function scheduleAutosave() {
+    if (autosaveTimer) clearTimeout(autosaveTimer);
+    autosaveTimer = setTimeout(() => {
+      try {
+        const json = JSON.stringify(card.value);
+        localStorage.setItem(AUTOSAVE_KEY, json);
+        localStorage.setItem(AUTOSAVE_NAME_KEY, fileName.value || '');
+        // Cover image: try to save, skip if too large
+        if (coverImageBase64.value) {
+          try {
+            localStorage.setItem(AUTOSAVE_COVER_KEY, coverImageBase64.value);
+          } catch (_) {
+            localStorage.removeItem(AUTOSAVE_COVER_KEY);
+          }
+        } else {
+          localStorage.removeItem(AUTOSAVE_COVER_KEY);
+        }
+      } catch (_) {
+        // localStorage full or unavailable, silently skip
+      }
+    }, AUTOSAVE_DEBOUNCE);
+  }
+
+  function hasAutosave() {
+    return !!localStorage.getItem(AUTOSAVE_KEY);
+  }
+
+  function restoreAutosave() {
+    try {
+      const raw = localStorage.getItem(AUTOSAVE_KEY);
+      if (!raw) return false;
+      const json = JSON.parse(raw);
+      loadFromJson(json, localStorage.getItem(AUTOSAVE_NAME_KEY) || '');
+      const cover = localStorage.getItem(AUTOSAVE_COVER_KEY);
+      if (cover) coverImageBase64.value = cover;
+      clearAutosave();
+      isDirty.value = true;
+      return true;
+    } catch (_) {
+      clearAutosave();
+      return false;
+    }
+  }
+
+  function clearAutosave() {
+    localStorage.removeItem(AUTOSAVE_KEY);
+    localStorage.removeItem(AUTOSAVE_COVER_KEY);
+    localStorage.removeItem(AUTOSAVE_NAME_KEY);
+  }
+
+  // Watch for changes and auto-save
+  watch([card, coverImageBase64, fileName], () => {
+    if (isDirty.value) scheduleAutosave();
+  }, { deep: true });
+
   // World book operations
   function addWorldEntry(entry = null) {
     const entries = card.value.data.character_book.entries;
@@ -336,6 +402,7 @@ export const useCardStore = defineStore('card', () => {
     addRegexScript, removeRegexScript,
     addTavernScript, removeTavernScript,
     addGreeting, removeGreeting,
-    createEmptyWorldEntry, createEmptyRegexScript, createEmptyTavernScript
+    createEmptyWorldEntry, createEmptyRegexScript, createEmptyTavernScript,
+    hasAutosave, restoreAutosave, clearAutosave
   };
 });

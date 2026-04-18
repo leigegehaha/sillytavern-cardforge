@@ -9,6 +9,7 @@ export const useAppStore = defineStore('app', () => {
   const confirmVisible = ref(false);
   const confirmMessage = ref('');
   let _confirmResolve = null;
+  let _confirmReject = null;
 
   function toast(message, type = 'info', duration = 3000) {
     const id = ++toastId;
@@ -23,10 +24,11 @@ export const useAppStore = defineStore('app', () => {
   function toastWarning(msg) { toast(msg, 'warning'); }
   function toastInfo(msg) { toast(msg, 'info'); }
 
-  function confirmAction(msg, callback) {
+  function confirmAction(msg, callback, onCancel) {
     confirmMessage.value = msg;
     confirmVisible.value = true;
     _confirmResolve = callback;
+    _confirmReject = onCancel || null;
   }
 
   function confirmYes() {
@@ -35,10 +37,15 @@ export const useAppStore = defineStore('app', () => {
       _confirmResolve();
       _confirmResolve = null;
     }
+    _confirmReject = null;
   }
 
   function confirmNo() {
     confirmVisible.value = false;
+    if (_confirmReject) {
+      _confirmReject();
+      _confirmReject = null;
+    }
     _confirmResolve = null;
   }
 

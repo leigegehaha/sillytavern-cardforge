@@ -254,6 +254,21 @@ function scrollDrawer() {
 onMounted(() => {
   loadDrawerHistory();
   window.addEventListener('beforeunload', () => { saveDrawerToHistory(); });
+
+  // Check for auto-saved card data
+  if (cardStore.hasAutosave()) {
+    appStore.confirmAction(
+      '检测到上次未保存的编辑内容，是否恢复？',
+      () => {
+        if (cardStore.restoreAutosave()) {
+          appStore.toastSuccess('已恢复上次的编辑内容');
+        }
+      },
+      () => {
+        cardStore.clearAutosave();
+      }
+    );
+  }
 });
 
 const navSections = [

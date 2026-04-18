@@ -133,12 +133,20 @@ export const useCardStore = defineStore('card', () => {
   const tavernScripts = computed(() => {
     const th = card.value.data.extensions?.tavern_helper;
     if (!th) return [];
+    let scripts;
     // Handle both dict and list-of-pairs formats
     if (Array.isArray(th)) {
       const scriptsEntry = th.find(e => e[0] === 'scripts');
-      return scriptsEntry ? scriptsEntry[1] : [];
+      scripts = scriptsEntry ? scriptsEntry[1] : [];
+    } else {
+      scripts = th.scripts || [];
     }
-    return th.scripts || [];
+    // Ensure every script has a valid button object
+    for (const s of scripts) {
+      if (!s.button) s.button = { enabled: false, buttons: [] };
+      if (!Array.isArray(s.button.buttons)) s.button.buttons = [];
+    }
+    return scripts;
   });
 
   const cardName = computed(() => card.value.data.name || '未命名角色');

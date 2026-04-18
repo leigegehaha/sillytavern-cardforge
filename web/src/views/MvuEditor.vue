@@ -162,6 +162,14 @@
             <div class="hint">XML 标签帮助 AI 区分变量数据和正文内容。</div>
           </div>
         </div>
+        <div class="grid-2">
+          <div class="form-group">
+            <label class="toggle-label">
+              <input type="checkbox" v-model="trackPresentChars"> 启用在场角色追踪
+            </label>
+            <div class="hint">勾选后会自动添加"在场角色"变量，AI 每次回复更新当前在场的角色名单，状态栏据此动态显示/隐藏角色面板。</div>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -249,6 +257,7 @@ const layoutStrategy = ref('centralized');
 const injectMode = ref('single');
 const namingPrefix = ref('mvu');
 const xmlWrap = ref('status');
+const trackPresentChars = ref(false);
 
 const defaultVarGroups = [
   {
@@ -524,6 +533,10 @@ const initVarYaml = computed(() => {
       yaml += `  ${f.name}: ${val}\n`;
     }
   }
+  if (trackPresentChars.value) {
+    const charNames = varGroups.filter(g => g.fields.length > 0).map(g => g.name).join(',');
+    yaml += `在场角色追踪:\n  在场角色: "${charNames}"\n`;
+  }
   return yaml || '(请添加变量)';
 });
 
@@ -555,6 +568,13 @@ const updateRuleText = computed(() => {
       }
     }
     text += '</UpdateVariable>';
+  }
+  if (trackPresentChars.value) {
+    if (updateFormat.value === 'lodash') {
+      text += `\n_.set('在场角色追踪.在场角色', '旧值', '当前在场的角色名用逗号分隔');\n`;
+    } else {
+      text += `\n{ "op": "replace", "path": "/在场角色追踪/在场角色", "value": "当前在场的角色名用逗号分隔" }\n`;
+    }
   }
   text += '\n\n注意：只更新发生变化的变量，未变化的不需要输出。';
   return text;
@@ -774,7 +794,7 @@ function doGenerateAndInject() {
   // 7. 变量输出格式强调条目（常驻）
   const emphEntry = cardStore.addWorldEntry();
   emphEntry.comment = `${rulePfx}变量输出格式强调`;
-  emphEntry.content = '---\n变量输出格式强调:\n  rule: The following must be inserted to the end of reply, and cannot be omitted\n  format: <UpdateVariable> tag with analysis and update commands\n---';
+  emphEntry.content = '---\n变量输出格式强调:\n  rule: The following must be inserted to the end of reply, and cannot be omitted\n  format: |\n    <UpdateVariable>\n    (variable update commands)\n    </UpdateVariable>\n    <StatusPlaceHolderImpl/>\n  note: <StatusPlaceHolderImpl/> must always appear after </UpdateVariable>, never omit it\n---';
   emphEntry.constant = true;
   emphEntry.enabled = true;
   emphEntry.position = 'after_char';

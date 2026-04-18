@@ -78,8 +78,16 @@
 
         <button class="btn btn--primary btn--lg" style="width:100%" :disabled="aiGenerating || !aiWorldDesc.trim()"
           @click="handleAiGenerate">
-          {{ aiGenerating ? 'AI 正在生成世界书条目...' : ['large','massive','extreme'].includes(aiTargetCount) ? '分批生成世界书（大型模式）' : '开始生成世界书' }}
+          {{ aiGenerating ? `AI 正在生成... (${aiResults.length} 条)` : '开始生成世界书' }}
         </button>
+
+        <!-- 生成进度条 -->
+        <div v-if="aiGenerating" class="ai-progress mt-md">
+          <div class="ai-progress__bar">
+            <div class="ai-progress__fill" :style="{ width: aiBatchProgress + '%' }"></div>
+          </div>
+          <div class="ai-progress__text">第 {{ aiBatchCurrent }} / {{ aiBatchTotal }} 批 · 已生成 {{ aiResults.length }} 条</div>
+        </div>
 
         <!-- 生成结果预览 -->
         <div v-if="aiResults.length > 0" class="ai-results mt-md">
@@ -142,8 +150,16 @@
         </div>
         <button class="btn btn--accent" style="width:100%;padding:10px"
           @click="generateFromNovel" :disabled="novelGenerating || !novelText.trim()">
-          {{ novelGenerating ? 'AI 正在分析小说...' : '开始提取世界书' }}
+          {{ novelGenerating ? `AI 正在分析... (${novelResults.length} 条)` : '开始提取世界书' }}
         </button>
+
+        <!-- 小说分块进度条 -->
+        <div v-if="novelGenerating" class="ai-progress mt-md">
+          <div class="ai-progress__bar">
+            <div class="ai-progress__fill" :style="{ width: novelChunkProgress + '%' }"></div>
+          </div>
+          <div class="ai-progress__text">第 {{ novelChunkCurrent }} / {{ novelChunkTotal }} 块 · 已提取 {{ novelResults.length }} 条</div>
+        </div>
 
         <!-- 提取结果预览 -->
         <div v-if="novelResults.length > 0" class="mt-md">
@@ -537,6 +553,9 @@ const novelText = ref('');
 const novelExtra = ref('');
 const novelGenerating = ref(false);
 const novelResults = ref([]);
+const novelChunkCurrent = ref(0);
+const novelChunkTotal = ref(1);
+const novelChunkProgress = computed(() => novelChunkTotal.value > 0 ? Math.round((novelChunkCurrent.value / novelChunkTotal.value) * 100) : 0);
 
 // 参考小说（持久化到 cardData.extensions.cfReferenceNovel，跟着卡走）
 const showRefNovelPanel = ref(false);
@@ -591,6 +610,36 @@ function importNovelFile() {
   input.click();
 }
 
+function splitTextToChunks(text, chunkSize = 6000) {
+  const chunks = [];
+  const chapterPattern = /(?=第[一二三四五六七八九十百千\d]+[章回节卷]|Chapter\s+\d+)/gi;
+  const chapters = text.split(chapterPattern).filter(s => s.trim().length > 50);
+
+  if (chapters.length >= 3) {
+    let current = '';
+    for (const ch of chapters) {
+      if ((current + ch).length > chunkSize && current.length > 500) {
+        chunks.push(current);
+        current = ch;
+      } else {
+        current += ch;
+      }
+    }
+    if (current.trim()) chunks.push(current);
+  } else {
+    for (let i = 0; i < text.length; i += chunkSize) {
+      let end = Math.min(i + chunkSize, text.length);
+      if (end < text.length) {
+        const breakMatch = text.slice(end - 200, end).match(/.*[。！？\n]/);
+        if (breakMatch) end = (end - 200) + breakMatch.index + breakMatch[0].length;
+      }
+      chunks.push(text.slice(i, end));
+      if (end >= text.length) break;
+    }
+  }
+  return chunks.length > 0 ? chunks : [text];
+}
+
 async function generateFromNovel() {
   if (!apiStore.isConfigured) { appStore.toastError('请先配置 API Key'); return; }
   if (!novelText.value.trim()) return;
@@ -598,15 +647,11 @@ async function generateFromNovel() {
   novelResults.value = [];
 
   try {
-    const textPreview = novelText.value.slice(0, 8000);
-    const prompt = `你是 SillyTavern 世界书架构专家。请从以下小说文本中提取世界观设定，生成世界书条目。
+    const chunks = splitTextToChunks(novelText.value);
+    novelChunkTotal.value = chunks.length;
+    novelChunkCurrent.value = 0;
 
-【小说文本】
-${textPreview}
-
-${novelExtra.value ? '【额外要求】\n' + novelExtra.value + '\n' : ''}
-
-请从小说中提取以下信息并生成世界书条目：
+    const baseInstruction = `请从小说文本中提取以下信息并生成世界书条目：
 - 世界观/背景设定（constant=true）
 - 重要角色（每个角色一条，含外貌、性格、背景）
 - 重要地点/场景
@@ -614,36 +659,45 @@ ${novelExtra.value ? '【额外要求】\n' + novelExtra.value + '\n' : ''}
 - 重要物品/组织
 
 输出 JSON 数组格式：
-[
-  {
-    "comment": "条目名称",
-    "keys": ["关键词1", "关键词2"],
-    "content": "条目内容",
-    "constant": true或false,
-    "position": "before_char",
-    "insertion_order": 100
-  }
-]
+[{"comment":"条目名称","keys":["关键词"],"content":"条目内容","constant":bool,"position":"before_char","insertion_order":100}]
 
 角色条目用关键词触发（constant=false），世界观规则用常驻（constant=true）。
-注意：每次最多生成10条，宁可少生成也不要截断。每条content控制在300字以内。
 只输出 JSON 数组，不要其他文字。`;
 
-    const parsed = await chatForJsonArray(apiStore, [
-      { role: 'system', content: '你是世界书架构专家，擅长从小说文本中提取世界观设定。只输出合法JSON数组。所有内容必须用中文，禁止英文。' },
-      { role: 'user', content: prompt }
-    ], { temperature: 0.7, maxTokens: apiStore.getModelMaxTokens(apiStore.activeProvider?.model) });
+    for (let i = 0; i < chunks.length; i++) {
+      novelChunkCurrent.value = i + 1;
 
-    novelResults.value = parsed.map(item => ({
-      ...item,
-      selected: true,
-      keys: item.keys || [],
-      constant: item.constant ?? false,
-      position: item.position || 'before_char',
-      insertion_order: item.insertion_order || 100
-    }));
+      const existingNames = novelResults.value.map(r => r.comment).join('、');
+      const chunkPrompt = `你是 SillyTavern 世界书架构专家。请从以下小说文本片段中提取世界观设定。
 
-    appStore.toastSuccess(`从小说中提取了 ${novelResults.value.length} 条世界书条目`);
+${existingNames ? `【已提取的条目（不要重复）】\n${existingNames}\n` : ''}
+${novelExtra.value ? '【额外要求】\n' + novelExtra.value + '\n' : ''}
+【小说文本 第${i + 1}/${chunks.length}块】
+${chunks[i]}
+
+${baseInstruction}`;
+
+      try {
+        const parsed = await chatForJsonArray(apiStore, [
+          { role: 'system', content: '你是世界书架构专家，擅长从小说文本中提取世界观设定。只输出合法JSON数组。所有内容必须用中文，禁止英文。' },
+          { role: 'user', content: chunkPrompt }
+        ], { temperature: 0.7, maxTokens: apiStore.getModelMaxTokens(apiStore.activeProvider?.model) });
+
+        const newItems = parsed.map(item => ({
+          ...item,
+          selected: true,
+          keys: item.keys || [],
+          constant: item.constant ?? false,
+          position: item.position || 'before_char',
+          insertion_order: item.insertion_order || 100
+        }));
+        novelResults.value.push(...newItems);
+      } catch (e) {
+        appStore.toastWarning(`第 ${i + 1} 块提取出错: ${e.message}，继续下一块...`);
+      }
+    }
+
+    appStore.toastSuccess(`小说分析完成，共提取 ${novelResults.value.length} 条世界书条目`);
   } catch (e) {
     appStore.toastError('提取失败: ' + e.message);
   } finally { novelGenerating.value = false; }
@@ -701,7 +755,7 @@ ${textPreview}
 
 ${novelExtra.value ? '【额外要求】\n' + novelExtra.value + '\n' : ''}
 
-输出 JSON 数组格式，同之前。每次最多生成10条，每条content控制在300字以内。只输出JSON。`;
+输出 JSON 数组格式，同之前。只输出JSON。`;
 
     const parsed = await chatForJsonArray(apiStore, [
       { role: 'system', content: '你是世界书架构专家。继续提取条目，不要重复。只输出合法JSON数组。所有内容必须用中文，禁止英文。' },
@@ -749,6 +803,9 @@ const aiDescStyle = ref('auto');
 const aiExtraReq = ref('');
 const aiGenerating = ref(false);
 const aiResults = ref([]);
+const aiBatchCurrent = ref(0);
+const aiBatchTotal = ref(1);
+const aiBatchProgress = computed(() => aiBatchTotal.value > 0 ? Math.round((aiBatchCurrent.value / aiBatchTotal.value) * 100) : 0);
 
 const entryTypeOpts = [
   { value: 'system', label: '系统规则' },
@@ -792,10 +849,18 @@ async function handleAiGenerate() {
 
   try {
     const typeLabels = aiEntryTypes.value.map(v => entryTypeOpts.find(o => o.value === v)?.label).filter(Boolean);
-
     const cardContext = buildCardContext(store);
-    const prompt = `你是一个专业的 SillyTavern 世界书（Character Book）架构师。
-请根据以下信息生成一套完整的世界书条目。
+    const targetRange = countMap[aiTargetCount.value];
+
+    const targetMatch = targetRange.match(/(\d+)\s*[-~]\s*(\d+)/);
+    const targetMax = targetMatch ? parseInt(targetMatch[2]) : 15;
+    const perBatch = 15;
+    const totalBatches = Math.max(1, Math.ceil(targetMax / perBatch));
+
+    aiBatchTotal.value = totalBatches;
+    aiBatchCurrent.value = 0;
+
+    const basePrompt = `你是一个专业的 SillyTavern 世界书（Character Book）架构师。
 
 ## 已有角色卡信息
 ${cardContext}
@@ -803,50 +868,48 @@ ${cardContext}
 ## 世界观描述
 ${aiWorldDesc.value}
 
-## 生成要求
-- 需要生成的条目类型：${typeLabels.join('、')}
-- 条目数量目标：${countMap[aiTargetCount.value]}条
-- 内容风格：${styleMap[aiDescStyle.value]}
-${aiExtraReq.value ? `- 额外要求：${aiExtraReq.value}` : ''}
-
 ## 条目类型说明
-- 系统规则（constant=true）：AI必须始终遵守的核心规则，如世界法则、行为约束。insertion_order=1-10，position=before_char
+- 系统规则（constant=true）：AI必须始终遵守的核心规则。insertion_order=1-10，position=before_char
 - 世界设定（constant=true或关键词触发）：经济系统、文化、法律等。insertion_order=5-20，position=before_char
-- NPC角色（关键词触发）：每个NPC含外貌、性格（含矛盾点）、背景、说话方式。insertion_order=50-80，position=before_char
-- 地点场景（关键词触发）：地点描述、氛围、可交互内容、出没NPC。insertion_order=30-50，position=before_char
+- NPC角色（关键词触发）：每个NPC含外貌、性格、背景、说话方式。insertion_order=50-80，position=before_char
+- 地点场景（关键词触发）：地点描述、氛围、可交互内容。insertion_order=30-50，position=before_char
 - 事件规则（关键词触发）：特定事件的规则和流程。insertion_order=70-90，position=before_char
 - 输出格式（constant=true）：告诉AI按什么格式回复。insertion_order=9990-9999，position=after_char
 
 ## 输出格式
-严格输出 JSON 数组，每个条目包含：
-[
-  {
-    "comment": "[类型前缀]条目名称（如 [mvu_plot]核心设定、[mvu_update]变量规则）",
-    "type": "系统规则|世界设定|NPC角色|地点场景|事件规则|输出格式",
-    "keys": ["触发关键词1", "关键词2"],
-    "content": "条目内容",
-    "constant": true或false,
-    "position": "before_char"或"after_char",
-    "insertion_order": 数字
-  }
-]
+严格输出 JSON 数组：
+[{"comment":"条目名称","type":"类型","keys":["关键词"],"content":"内容","constant":bool,"position":"before_char或after_char","insertion_order":数字}]
+只输出JSON数组，不要其他文字。${buildRefNovelSegment()}`;
 
-只输出JSON数组，不要其他文字。每次最多生成10条，每条content控制在300字以内，宁可少生成也不要截断JSON。${buildRefNovelSegment()}`;
+    for (let batch = 0; batch < totalBatches; batch++) {
+      aiBatchCurrent.value = batch + 1;
 
-    const parsed = await chatForJsonArray(apiStore, [
-      { role: 'system', content: '你是SillyTavern世界书架构专家。精通世界书条目的分类、关键词设计、insertion_order分层策略。始终输出合法JSON。所有内容必须用中文，禁止英文。' },
-      { role: 'user', content: prompt }
-    ], { temperature: 0.7, maxTokens: apiStore.getModelMaxTokens(apiStore.activeProvider?.model) });
-    aiResults.value = parsed.map(item => ({
-      ...item,
-      selected: true,
-      keys: item.keys || [],
-      constant: item.constant ?? false,
-      position: item.position || 'before_char',
-      insertion_order: item.insertion_order || 100
-    }));
+      const existingNames = aiResults.value.map(r => r.comment).join('、');
+      const batchPrompt = batch === 0
+        ? `${basePrompt}\n\n## 生成要求\n- 条目类型：${typeLabels.join('、')}\n- 内容风格：${styleMap[aiDescStyle.value]}\n${aiExtraReq.value ? `- 额外要求：${aiExtraReq.value}\n` : ''}- 本批生成约 ${perBatch} 条，覆盖最重要的设定`
+        : `${basePrompt}\n\n## 生成要求\n- 条目类型：${typeLabels.join('、')}\n- 内容风格：${styleMap[aiDescStyle.value]}\n${aiExtraReq.value ? `- 额外要求：${aiExtraReq.value}\n` : ''}- 已生成的条目：${existingNames}\n- 请生成更多未覆盖的条目，不要重复已有的\n- 本批生成约 ${perBatch} 条`;
 
-    appStore.toastSuccess(`成功生成 ${aiResults.value.length} 条世界书条目，请预览后点击「注入选中条目」`);
+      try {
+        const parsed = await chatForJsonArray(apiStore, [
+          { role: 'system', content: '你是SillyTavern世界书架构专家。始终输出合法JSON。所有内容必须用中文，禁止英文。' },
+          { role: 'user', content: batchPrompt }
+        ], { temperature: 0.7, maxTokens: apiStore.getModelMaxTokens(apiStore.activeProvider?.model) });
+
+        const newItems = parsed.map(item => ({
+          ...item,
+          selected: true,
+          keys: item.keys || [],
+          constant: item.constant ?? false,
+          position: item.position || 'before_char',
+          insertion_order: item.insertion_order || 100
+        }));
+        aiResults.value.push(...newItems);
+      } catch (e) {
+        appStore.toastWarning(`第 ${batch + 1} 批生成出错: ${e.message}，继续下一批...`);
+      }
+    }
+
+    appStore.toastSuccess(`生成完成，共 ${aiResults.value.length} 条世界书条目`);
   } catch (e) {
     appStore.toastError(`生成失败: ${e.message}`);
   } finally {
@@ -1351,6 +1414,41 @@ function syncPosition(entry) {
 .ai-result-item__meta {
   font-size: 11px;
   color: var(--cf-text-muted);
+}
+
+.ai-progress {
+  margin: 12px 0;
+}
+.ai-progress__bar {
+  width: 100%;
+  height: 8px;
+  background: rgba(255, 255, 255, 0.06);
+  border-radius: 4px;
+  overflow: hidden;
+}
+.ai-progress__fill {
+  height: 100%;
+  border-radius: 4px;
+  background: linear-gradient(90deg, var(--cf-accent), #06b6d4);
+  transition: width 0.5s ease;
+  position: relative;
+}
+.ai-progress__fill::after {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.3), transparent);
+  animation: aiProgressShine 1.5s infinite;
+}
+@keyframes aiProgressShine {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(100%); }
+}
+.ai-progress__text {
+  margin-top: 6px;
+  font-size: 12px;
+  color: var(--cf-text-muted);
+  text-align: center;
 }
 
 .wb-entry {
