@@ -529,8 +529,13 @@ const initVarYaml = computed(() => {
     yaml += `${group.name}:\n`;
     for (const f of group.fields) {
       if (!f.name) continue;
-      const val = f.type === 'number' ? (f.defaultValue || '0') : `"${f.defaultValue || ''}"`;
-      yaml += `  ${f.name}: ${val}\n`;
+      if (f.type === 'number') {
+        yaml += `  ${f.name}: ${f.defaultValue || '0'}\n`;
+      } else if (f.type === 'record') {
+        yaml += `  ${f.name}: {}\n`;
+      } else {
+        yaml += `  ${f.name}: "${f.defaultValue || ''}"\n`;
+      }
     }
   }
   if (trackPresentChars.value) {
@@ -809,8 +814,6 @@ function doGenerateAndInject() {
       replaceString: '', markdownOnly: false, promptOnly: true, minDepth: null, maxDepth: null },
     { scriptName: '[不发送]界面占位符', findRegex: '/<StatusPlaceHolderImpl\\s*\\/>/g',
       replaceString: '', markdownOnly: false, promptOnly: true, minDepth: null, maxDepth: null },
-    { scriptName: '[隐藏]变量更新', findRegex: '/<UpdateVariable>[\\s\\S]*?<\\/UpdateVariable>/gs',
-      replaceString: '', markdownOnly: true, promptOnly: false, minDepth: null, maxDepth: null },
     { scriptName: '[美化]完整变量完成', findRegex: '/<UpdateVariable>([\\s\\S]*?)<\\/UpdateVariable>/gs',
       replaceString: '<details style="background:rgba(0,0,0,0.15);border:1px solid rgba(255,255,255,0.06);border-radius:6px;padding:8px;margin:4px 0;font-size:12px"><summary style="cursor:pointer;color:#888">变量更新</summary><pre style="white-space:pre-wrap;color:#aaa;margin:4px 0">$1</pre></details>',
       markdownOnly: true, promptOnly: false, minDepth: null, maxDepth: null },
@@ -819,7 +822,9 @@ function doGenerateAndInject() {
       markdownOnly: true, promptOnly: false, minDepth: null, maxDepth: null }
   ];
   for (const r of regexPairs) {
-    cardStore.addRegexScript({ ...cardStore.createEmptyRegexScript(), scriptName: r.scriptName, findRegex: r.findRegex, replaceString: r.replaceString, markdownOnly: r.markdownOnly, promptOnly: r.promptOnly, minDepth: r.minDepth, maxDepth: r.maxDepth });
+    const script = { ...cardStore.createEmptyRegexScript(), ...r };
+    if (r.markdownOnly) script.runOnEdit = false;
+    cardStore.addRegexScript(script);
   }
 
   // 9. 为开场白追加占位符

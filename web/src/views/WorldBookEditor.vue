@@ -642,36 +642,63 @@ function importNovelFile() {
   input.click();
 }
 
-function splitTextToChunks(text, chunkSize = 6000) {
+function splitTextToChunks(text, chunkSize = 8000) {
+  const MAX_CHUNKS = 12;
   const chunks = [];
-  // Try to split by chapter markers first
-  const chapterPattern = /(?=第[一二三四五六七八九十百千\d]+[章回节卷]|Chapter\s+\d+)/gi;
-  const chapters = text.split(chapterPattern).filter(s => s.trim().length > 50);
+  const totalLen = text.length;
 
-  if (chapters.length >= 3) {
-    // Merge small chapters into chunks
-    let current = '';
-    for (const ch of chapters) {
-      if ((current + ch).length > chunkSize && current.length > 500) {
-        chunks.push(current);
-        current = ch;
-      } else {
-        current += ch;
+  // Short text: process all
+  if (totalLen <= chunkSize * MAX_CHUNKS) {
+    const chapterPattern = /(?=第[一二三四五六七八九十百千\d]+[章回节卷]|Chapter\s+\d+)/gi;
+    const chapters = text.split(chapterPattern).filter(s => s.trim().length > 50);
+
+    if (chapters.length >= 3) {
+      let current = '';
+      for (const ch of chapters) {
+        if ((current + ch).length > chunkSize && current.length > 500) {
+          chunks.push(current);
+          current = ch;
+        } else {
+          current += ch;
+        }
+      }
+      if (current.trim()) chunks.push(current);
+    } else {
+      for (let i = 0; i < totalLen; i += chunkSize) {
+        let end = Math.min(i + chunkSize, totalLen);
+        if (end < totalLen) {
+          const breakMatch = text.slice(end - 200, end).match(/.*[。！？\n]/);
+          if (breakMatch) end = (end - 200) + breakMatch.index + breakMatch[0].length;
+        }
+        chunks.push(text.slice(i, end));
+        if (end >= totalLen) break;
       }
     }
-    if (current.trim()) chunks.push(current);
-  } else {
-    // No chapter markers, split by size
-    for (let i = 0; i < text.length; i += chunkSize) {
-      // Find a good break point (end of sentence)
-      let end = Math.min(i + chunkSize, text.length);
-      if (end < text.length) {
-        const breakMatch = text.slice(end - 200, end).match(/.*[。！？\n]/);
-        if (breakMatch) end = (end - 200) + breakMatch.index + breakMatch[0].length;
-      }
-      chunks.push(text.slice(i, end));
-      if (end >= text.length) break;
+    return chunks.length > 0 ? chunks : [text];
+  }
+
+  // Long text (100k+): strategic sampling
+  // 1. Beginning (30k) - world setup, character introductions
+  const headSize = Math.min(30000, Math.floor(totalLen * 0.1));
+  chunks.push(text.slice(0, headSize));
+
+  // 2. Sample evenly from middle
+  const middleChunks = MAX_CHUNKS - 2; // reserve 1 for head, 1 for tail
+  const middleStart = headSize;
+  const middleEnd = totalLen - 15000;
+  const step = Math.floor((middleEnd - middleStart) / middleChunks);
+  for (let i = 0; i < middleChunks && middleStart + i * step < middleEnd; i++) {
+    const start = middleStart + i * step;
+    let end = Math.min(start + chunkSize, totalLen);
+    if (end < totalLen) {
+      const breakMatch = text.slice(end - 200, end).match(/.*[。！？\n]/);
+      if (breakMatch) end = (end - 200) + breakMatch.index + breakMatch[0].length;
     }
+    chunks.push(text.slice(start, end));
+  }
+
+  // 3. Ending (15k) - final state
+  chunks.push(text.slice(totalLen - 15000));
   }
   return chunks.length > 0 ? chunks : [text];
 }
