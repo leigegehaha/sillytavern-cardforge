@@ -426,7 +426,7 @@
                 <option value="atDepth_user">@D [用户] 在深度</option>
                 <option value="atDepth_ai">@D [AI] 在深度</option>
               </select>
-              <div v-if="entry.position?.startsWith('atDepth')" class="form-group" style="margin-top:6px">
+              <div v-if="String(entry.position || '').startsWith('atDepth')" class="form-group" style="margin-top:6px">
                 <label>深度值</label>
                 <input class="input" type="number" v-model.number="entry.extensions.depth" min="0" placeholder="0=最底部" @input="store.markDirty()">
                 <div class="hint">D0=最新内容旁（效力最强），D1=最后一条消息，D4=较远位置</div>
@@ -699,7 +699,7 @@ function splitTextToChunks(text, chunkSize = 8000) {
 
   // 3. Ending (15k) - final state
   chunks.push(text.slice(totalLen - 15000));
-  }
+
   return chunks.length > 0 ? chunks : [text];
 }
 

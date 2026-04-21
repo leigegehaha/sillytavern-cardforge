@@ -14,7 +14,8 @@ export function buildCardContext(cardStore) {
   if (d.name) lines.push(`角色名：${d.name}`);
   if (d.personality) lines.push(`性格：${d.personality}`);
   if (d.scenario) lines.push(`场景设定：${d.scenario}`);
-  if (d.description) lines.push(`角色描述（前300字）：${d.description.slice(0, 300)}`);
+  if (d.description) lines.push(`角色描述（前500字）：${d.description.slice(0, 500)}`);
+  if (d.first_mes) lines.push(`开场白（前1000字）：${d.first_mes.slice(0, 1000)}`);
 
   // 世界书条目摘要
   if (entries.length > 0) {
