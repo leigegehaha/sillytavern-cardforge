@@ -1,6 +1,6 @@
 {
   "name": "sillytavern-cardforge",
-  "version": "6.2.0",
+  "version": "7.0.0",
   "description": "SillyTavern 角色卡锻造炉 - 全功能角色卡制作工具",
   "main": "src/main/main.js",
   "scripts": {
