@@ -101,6 +101,20 @@
           </div>
         </div>
         <div class="form-group">
+          <label>温度 (Temperature)</label>
+          <div class="temperature-row">
+            <input type="range" class="temperature-slider"
+              :value="provider.temperature ?? 0.8"
+              min="0" max="2" step="0.01"
+              @input="provider.temperature = parseFloat($event.target.value)">
+            <input type="number" class="input temperature-input"
+              :value="provider.temperature ?? 0.8"
+              min="0" max="2" step="0.01"
+              @input="provider.temperature = Math.min(2, Math.max(0, parseFloat($event.target.value) || 0))">
+          </div>
+          <div class="hint" style="margin-top:4px">0 = 确定性最高 · 1 = 均衡 · 2 = 最随机。默认 0.8，创意内容可调高，JSON 生成建议 0.6~0.8</div>
+        </div>
+        <div class="form-group">
           <label class="toggle-label">
             <input type="checkbox" v-model="provider.enabled"> 启用此服务商（禁用后无法设为当前）
           </label>
@@ -184,6 +198,21 @@ async function testConnection(provider) {
 </script>
 
 <style scoped>
+.temperature-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.temperature-slider {
+  flex: 1;
+  accent-color: var(--cf-accent);
+  cursor: pointer;
+}
+.temperature-input {
+  width: 70px;
+  flex-shrink: 0;
+  text-align: center;
+}
 .toggle-label {
   display: flex; align-items: center; gap: 6px;
   font-size: 13px; cursor: pointer; color: var(--cf-text-secondary);

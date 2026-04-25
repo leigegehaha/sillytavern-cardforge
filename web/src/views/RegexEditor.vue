@@ -67,13 +67,25 @@
       </div>
     </div>
 
-    <div v-for="(script, i) in scripts" :key="script.id" class="card mb-md">
+    <div v-for="(script, i) in scripts" :key="script.id" class="card mb-md"
+      :class="{ 'regex--dragging': dragSourceId === script.id, 'regex--dragover': dragOverId === script.id }"
+      :draggable="dragEnabledId === script.id"
+      @dragstart="onDragStart($event, script.id)"
+      @dragover.prevent="onDragOver($event, script.id)"
+      @dragleave="onDragLeave(script.id)"
+      @drop.prevent="onDrop($event, script.id)"
+      @dragend="onDragEnd">
       <div class="card__header">
         <div class="flex-row">
           <label v-if="batchMode" class="toggle-label" style="margin-right:4px">
             <input type="checkbox" :checked="selectedIds.has(script.id)"
               @change="toggleSelect(script.id)">
           </label>
+          <span class="regex-drag-handle"
+            @mousedown="dragEnabledId = script.id"
+            @mouseup="dragEnabledId = null"
+            @mouseleave="dragEnabledId = null"
+            title="拖拽排序">&#x22EE;&#x22EE;</span>
           <span class="badge badge--info">#{{ i + 1 }}</span>
           <input class="input" style="width:300px;font-weight:600" v-model="script.scriptName" @input="store.markDirty()">
           <label class="toggle-label">
@@ -156,6 +168,14 @@ import { buildCardContext } from '../utils/card-context.js';
 import { chatForJsonArray } from '../utils/json-repair.js';
 
 const store = useCardStore();
+const dragSourceId = ref(null);
+const dragOverId = ref(null);
+const dragEnabledId = ref(null);
+function onDragStart(e, id) { dragSourceId.value = id; e.dataTransfer.effectAllowed = 'move'; }
+function onDragOver(e, id) { if (id === dragSourceId.value) return; dragOverId.value = id; e.dataTransfer.dropEffect = 'move'; }
+function onDragLeave(id) { if (dragOverId.value === id) dragOverId.value = null; }
+function onDrop(e, id) { const src = dragSourceId.value; if (src && id !== src) store.reorderRegexScript(src, id); dragSourceId.value = null; dragOverId.value = null; dragEnabledId.value = null; }
+function onDragEnd() { dragSourceId.value = null; dragOverId.value = null; dragEnabledId.value = null; }
 const apiStore = useApiStore();
 const appStore = useAppStore();
 const scripts = computed(() => store.regexScripts);
@@ -404,4 +424,8 @@ function togglePlacement(script, val) {
   border: 1px solid rgba(96, 165, 250, 0.2);
   background: rgba(96, 165, 250, 0.04);
 }
+.regex-drag-handle { cursor: grab; padding: 0 6px; color: var(--cf-text-muted); font-size: 14px; letter-spacing: -2px; user-select: none; }
+.regex-drag-handle:active { cursor: grabbing; }
+.regex--dragging { opacity: 0.4; }
+.regex--dragover { border-color: var(--cf-accent) !important; box-shadow: 0 0 8px rgba(96,165,250,0.3); }
 </style>

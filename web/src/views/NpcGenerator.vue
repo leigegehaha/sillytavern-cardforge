@@ -54,6 +54,9 @@
                 <option value="resume">人生履历法（童年-青少年-当前+核心特质+条件特质）</option>
               </select>
             </div>
+            <label class="toggle-label" style="margin-bottom:8px">
+              <input type="checkbox" v-model="npcStreamMode"> 流式生成
+            </label>
             <button class="btn btn--primary btn--lg" style="width:100%" :disabled="generating"
               @click="handleAutoGenerate">
               {{ generating ? '生成中...' : '开始生成' }}
@@ -120,6 +123,9 @@
                 <option value="detailed">多维度分离</option>
               </select>
             </div>
+            <label class="toggle-label" style="margin-bottom:8px">
+              <input type="checkbox" v-model="npcStreamMode"> 流式生成
+            </label>
             <button class="btn btn--primary btn--lg" style="width:100%" :disabled="generating || !npcInput.name"
               @click="handleExpand">
               {{ generating ? '生成中...' : '生成完整角色' }}
@@ -145,9 +151,13 @@
               <div class="empty-state__desc">在左侧设置参数后点击生成按钮</div>
             </div>
 
-            <div v-if="generating" class="empty-state">
+            <div v-if="generating && (!npcStreamMode || !npcStreamText)" class="empty-state">
               <div class="empty-state__icon" style="animation: pulse 1.5s infinite"></div>
               <div class="empty-state__title">AI 正在生成中...</div>
+            </div>
+            <div v-if="generating && npcStreamMode && npcStreamText" class="npc-stream-preview">
+              <div class="npc-stream-preview__label">流式输出中...</div>
+              <pre class="npc-stream-preview__text">{{ npcStreamText }}</pre>
             </div>
 
             <div v-for="(npc, i) in generatedNpcs" :key="i" class="npc-result">
@@ -173,12 +183,12 @@
 </template>
 
 <script setup>
-import { ref, reactive, onMounted } from 'vue';
+import { ref, reactive, watch, onMounted } from 'vue';
 import { useCardStore } from '../stores/card.js';
 import { useApiStore } from '../stores/api.js';
 import { useAppStore } from '../stores/app.js';
 import { buildCardContext } from '../utils/card-context.js';
-import { chatForJsonArray } from '../utils/json-repair.js';
+import { chatForJsonArray, parseAiJsonArray } from '../utils/json-repair.js';
 
 const cardStore = useCardStore();
 const apiStore = useApiStore();
@@ -187,6 +197,9 @@ const appStore = useAppStore();
 const mode = ref('expand');
 const generating = ref(false);
 const generatedNpcs = ref([]);
+const npcStreamMode = ref(localStorage.getItem('cf_npc_stream_mode') === 'true');
+const npcStreamText = ref('');
+watch(npcStreamMode, v => localStorage.setItem('cf_npc_stream_mode', v));
 
 // Auto mode
 const autoCount = ref(1);
@@ -270,10 +283,19 @@ ${buildStyleInstruction()}
 
 只输出JSON，不要其他文字。`;
 
-    const npcs = await chatForJsonArray(apiStore, [
+    const msgs = [
       { role: 'system', content: '你是一个角色创作专家，擅长为SillyTavern创建有深度的NPC角色。始终输出合法的JSON格式。' },
       { role: 'user', content: prompt }
-    ], { temperature: 0.9 });
+    ];
+    let npcs;
+    if (npcStreamMode.value) {
+      npcStreamText.value = '';
+      const fullText = await apiStore.chat(msgs, { temperature: 0.9, onChunk: chunk => { npcStreamText.value += chunk; } });
+      npcStreamText.value = '';
+      npcs = parseAiJsonArray(fullText);
+    } else {
+      npcs = await chatForJsonArray(apiStore, msgs, { temperature: 0.9 });
+    }
     generatedNpcs.value = npcs.map(n => ({ ...n, selected: true }));
     appStore.toastSuccess(`成功生成 ${npcs.length} 个NPC`);
   } catch (e) {
@@ -326,11 +348,20 @@ ${buildStyleInstruction()}
 
 只输出JSON，不要其他文字。`;
 
-    const npcs = await chatForJsonArray(apiStore, [
+    const msgs2 = [
       { role: 'system', content: '你是一个角色创作专家。始终输出合法的JSON格式。' },
       { role: 'user', content: prompt }
-    ], { temperature: 0.8 });
-    generatedNpcs.value = npcs.map(n => ({ ...n, selected: true }));
+    ];
+    let npcs2;
+    if (npcStreamMode.value) {
+      npcStreamText.value = '';
+      const fullText = await apiStore.chat(msgs2, { temperature: 0.8, onChunk: chunk => { npcStreamText.value += chunk; } });
+      npcStreamText.value = '';
+      npcs2 = parseAiJsonArray(fullText);
+    } else {
+      npcs2 = await chatForJsonArray(apiStore, msgs2, { temperature: 0.8 });
+    }
+    generatedNpcs.value = npcs2.map(n => ({ ...n, selected: true }));
     appStore.toastSuccess('角色生成完成');
   } catch (e) {
     appStore.toastError(`生成失败: ${e.message}`);
@@ -416,6 +447,9 @@ function injectToWorldBook() {
   font-size: 13px; cursor: pointer; color: var(--cf-text-secondary);
   input { accent-color: var(--cf-accent); }
 }
+.npc-stream-preview { padding: 10px; background: rgba(0,0,0,0.2); border: 1px solid rgba(96,165,250,0.2); border-radius: var(--cf-radius-sm); }
+.npc-stream-preview__label { font-size: 11px; color: var(--cf-accent); margin-bottom: 6px; }
+.npc-stream-preview__text { font-size: 12px; color: var(--cf-text-secondary); white-space: pre-wrap; word-break: break-all; max-height: 300px; overflow-y: auto; margin: 0; }
 
 @keyframes pulse {
   0%, 100% { opacity: 1; }

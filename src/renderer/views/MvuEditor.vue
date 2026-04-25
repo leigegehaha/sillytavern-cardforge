@@ -31,9 +31,21 @@
         </div>
       </div>
 
-      <div v-for="(group, gi) in varGroups" :key="gi" class="card mb-md">
+      <div v-for="(group, gi) in varGroups" :key="gi" class="card mb-md"
+        :class="{ 'mvu-group--dragging': groupDragSrcIdx === gi, 'mvu-group--dragover': groupDragOverIdx === gi }"
+        :draggable="groupDragEnabledIdx === gi"
+        @dragstart="onGroupDragStart($event, gi)"
+        @dragover.prevent="onGroupDragOver($event, gi)"
+        @dragleave="onGroupDragLeave(gi)"
+        @drop.prevent="onGroupDrop($event, gi)"
+        @dragend="onGroupDragEnd">
         <div class="card__header flex-between">
           <div class="flex-row">
+            <span class="mvu-drag-handle"
+              @mousedown="groupDragEnabledIdx = gi"
+              @mouseup="groupDragEnabledIdx = null"
+              @mouseleave="groupDragEnabledIdx = null"
+              title="拖拽排序分组">&#x22EE;&#x22EE;</span>
             <input class="input" style="width:200px;font-weight:600" v-model="group.name"
               placeholder="分组名（如：世界、主角、NPC）">
             <span class="badge badge--accent">{{ group.fields.length }} 个变量</span>
@@ -45,7 +57,14 @@
           </div>
         </div>
         <div class="card__body">
-          <div v-for="(field, fi) in group.fields" :key="fi" class="var-field">
+          <div v-for="(field, fi) in group.fields" :key="fi" class="var-field"
+            :class="{ 'mvu-field--dragging': fieldDragSrc?.gi === gi && fieldDragSrc?.fi === fi, 'mvu-field--dragover': fieldDragOver?.gi === gi && fieldDragOver?.fi === fi }"
+            :draggable="fieldDragEnabled?.gi === gi && fieldDragEnabled?.fi === fi"
+            @dragstart="onFieldDragStart($event, gi, fi)"
+            @dragover.prevent="onFieldDragOver($event, gi, fi)"
+            @dragleave="onFieldDragLeave(gi, fi)"
+            @drop.prevent="onFieldDrop($event, gi, fi)"
+            @dragend="onFieldDragEnd">
             <div class="grid-4">
               <div class="form-group">
                 <label>变量名</label>
@@ -67,6 +86,11 @@
                 <input class="input" v-model="field.defaultValue" :placeholder="getDefaultPlaceholder(field.type)">
               </div>
               <div class="form-group" style="display:flex;align-items:flex-end;gap:4px">
+                <span class="mvu-drag-handle"
+                  @mousedown="fieldDragEnabled = { gi, fi }"
+                  @mouseup="fieldDragEnabled = null"
+                  @mouseleave="fieldDragEnabled = null"
+                  title="拖拽排序">&#x22EE;&#x22EE;</span>
                 <button class="btn btn--ghost btn--sm" @click="field.showAdvanced = !field.showAdvanced">
                   {{ field.showAdvanced ? '收起' : '高级' }}
                 </button>
@@ -274,6 +298,75 @@ function goStep(n) {
     return;
   }
   step.value = n;
+}
+
+/* ========================================================================
+   拖拽排序
+   ======================================================================== */
+
+const groupDragSrcIdx = ref(null);
+const groupDragOverIdx = ref(null);
+const groupDragEnabledIdx = ref(null);
+
+function onGroupDragStart(e, gi) {
+  groupDragSrcIdx.value = gi;
+  e.dataTransfer.effectAllowed = 'move';
+}
+function onGroupDragOver(e, gi) {
+  if (gi === groupDragSrcIdx.value) return;
+  groupDragOverIdx.value = gi;
+  e.dataTransfer.dropEffect = 'move';
+}
+function onGroupDragLeave(gi) {
+  if (groupDragOverIdx.value === gi) groupDragOverIdx.value = null;
+}
+function onGroupDrop(e, gi) {
+  const src = groupDragSrcIdx.value;
+  if (src !== null && src !== gi) {
+    const [item] = varGroups.splice(src, 1);
+    varGroups.splice(gi, 0, item);
+  }
+  groupDragSrcIdx.value = null;
+  groupDragOverIdx.value = null;
+  groupDragEnabledIdx.value = null;
+}
+function onGroupDragEnd() {
+  groupDragSrcIdx.value = null;
+  groupDragOverIdx.value = null;
+  groupDragEnabledIdx.value = null;
+}
+
+const fieldDragSrc = ref(null);
+const fieldDragOver = ref(null);
+const fieldDragEnabled = ref(null);
+
+function onFieldDragStart(e, gi, fi) {
+  fieldDragSrc.value = { gi, fi };
+  e.dataTransfer.effectAllowed = 'move';
+}
+function onFieldDragOver(e, gi, fi) {
+  if (fieldDragSrc.value?.gi === gi && fieldDragSrc.value?.fi === fi) return;
+  if (fieldDragSrc.value?.gi !== gi) return; // 不跨分组
+  fieldDragOver.value = { gi, fi };
+  e.dataTransfer.dropEffect = 'move';
+}
+function onFieldDragLeave(gi, fi) {
+  if (fieldDragOver.value?.gi === gi && fieldDragOver.value?.fi === fi) fieldDragOver.value = null;
+}
+function onFieldDrop(e, gi, fi) {
+  const src = fieldDragSrc.value;
+  if (src && src.gi === gi && src.fi !== fi) {
+    const [item] = varGroups[gi].fields.splice(src.fi, 1);
+    varGroups[gi].fields.splice(fi, 0, item);
+  }
+  fieldDragSrc.value = null;
+  fieldDragOver.value = null;
+  fieldDragEnabled.value = null;
+}
+function onFieldDragEnd() {
+  fieldDragSrc.value = null;
+  fieldDragOver.value = null;
+  fieldDragEnabled.value = null;
 }
 
 /* ========================================================================
@@ -1004,6 +1097,25 @@ function copyText(text) {
 }
 
 /* 变量字段卡片 */
+.mvu-drag-handle {
+  cursor: grab;
+  padding: 0 6px;
+  color: var(--cf-text-muted);
+  font-size: 14px;
+  letter-spacing: -2px;
+  user-select: none;
+  &:active { cursor: grabbing; }
+}
+.mvu-group--dragging { opacity: 0.4; }
+.mvu-group--dragover {
+  border-color: var(--cf-accent) !important;
+  box-shadow: 0 0 8px rgba(96, 165, 250, 0.3);
+}
+.mvu-field--dragging { opacity: 0.4; }
+.mvu-field--dragover {
+  border-color: var(--cf-accent) !important;
+  box-shadow: 0 0 6px rgba(96, 165, 250, 0.25);
+}
 .var-field {
   background: rgba(0, 0, 0, 0.1);
   border: 1px solid var(--cf-border);

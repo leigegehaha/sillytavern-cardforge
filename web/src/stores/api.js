@@ -17,6 +17,7 @@ export const useApiStore = defineStore('api', () => {
           baseUrl: 'https://api.openai.com/v1',
           apiKey: '',
           model: 'gpt-4o',
+          temperature: 0.8,
           enabled: true
         },
         {
@@ -26,6 +27,7 @@ export const useApiStore = defineStore('api', () => {
           baseUrl: 'https://api.anthropic.com',
           apiKey: '',
           model: 'claude-sonnet-4-20250514',
+          temperature: 0.8,
           enabled: false
         },
         {
@@ -35,6 +37,7 @@ export const useApiStore = defineStore('api', () => {
           baseUrl: 'https://generativelanguage.googleapis.com',
           apiKey: '',
           model: 'gemini-2.0-flash',
+          temperature: 0.8,
           enabled: false
         }
       ];
@@ -92,16 +95,23 @@ export const useApiStore = defineStore('api', () => {
   }
 
   async function _callProvider(provider, messages, options) {
-    const temperature = options.temperature ?? 0.8;
+    const temperature = options.temperature ?? provider.temperature ?? 0.8;
     const modelMax = getModelMaxTokens(provider.model);
     const maxTokens = Math.min(options.maxTokens ?? 4096, modelMax);
+    const onChunk = options.onChunk || null;
 
     if (provider.type === 'openai') {
-      return callOpenAI(provider, messages, temperature, maxTokens);
+      return onChunk
+        ? streamOpenAI(provider, messages, temperature, maxTokens, onChunk)
+        : callOpenAI(provider, messages, temperature, maxTokens);
     } else if (provider.type === 'claude') {
-      return callClaude(provider, messages, temperature, maxTokens);
+      return onChunk
+        ? streamClaude(provider, messages, temperature, maxTokens, onChunk)
+        : callClaude(provider, messages, temperature, maxTokens);
     } else if (provider.type === 'gemini') {
-      return callGemini(provider, messages, temperature, maxTokens);
+      return onChunk
+        ? streamGemini(provider, messages, temperature, maxTokens, onChunk)
+        : callGemini(provider, messages, temperature, maxTokens);
     }
     throw new Error(`不支持的 API 类型: ${provider.type}`);
   }
@@ -225,6 +235,90 @@ export const useApiStore = defineStore('api', () => {
     return text;
   }
 
+  async function streamOpenAI(provider, messages, temperature, maxTokens, onChunk) {
+    const baseUrl = (provider.baseUrl || '').replace(/\/+$/, '');
+    const response = await fetch(`${baseUrl}/chat/completions`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${provider.apiKey}` },
+      body: JSON.stringify({ model: provider.model, messages, temperature, max_tokens: maxTokens, stream: true })
+    });
+    if (!response.ok) { const err = await response.text(); throw new Error(`OpenAI API 错误 (${response.status}): ${err}`); }
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '', fullText = '';
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n'); buffer = lines.pop();
+      for (const line of lines) {
+        if (!line.startsWith('data: ')) continue;
+        const data = line.slice(6).trim();
+        if (data === '[DONE]') continue;
+        try { const json = JSON.parse(data); const chunk = json.choices?.[0]?.delta?.content; if (chunk) { fullText += chunk; onChunk(chunk); } } catch {}
+      }
+    }
+    return fullText;
+  }
+
+  async function streamClaude(provider, messages, temperature, maxTokens, onChunk) {
+    const systemMsg = messages.find(m => m.role === 'system');
+    const userMessages = messages.filter(m => m.role !== 'system');
+    const body = { model: provider.model, max_tokens: maxTokens, temperature, stream: true, messages: userMessages.map(m => ({ role: m.role, content: m.content })) };
+    if (systemMsg) body.system = systemMsg.content;
+    const baseUrl = (provider.baseUrl || '').replace(/\/+$/, '');
+    const response = await fetch(`${baseUrl}/v1/messages`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-api-key': provider.apiKey, 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true' },
+      body: JSON.stringify(body)
+    });
+    if (!response.ok) { const err = await response.text(); throw new Error(`Claude API 错误 (${response.status}): ${err}`); }
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '', fullText = '';
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n'); buffer = lines.pop();
+      for (const line of lines) {
+        if (!line.startsWith('data: ')) continue;
+        try { const json = JSON.parse(line.slice(6)); if (json.type === 'content_block_delta' && json.delta?.type === 'text_delta') { const chunk = json.delta.text; if (chunk) { fullText += chunk; onChunk(chunk); } } } catch {}
+      }
+    }
+    return fullText;
+  }
+
+  async function streamGemini(provider, messages, temperature, maxTokens, onChunk) {
+    const contents = [];
+    let systemInstruction = null;
+    for (const msg of messages) {
+      if (msg.role === 'system') { systemInstruction = msg.content; }
+      else { contents.push({ role: msg.role === 'assistant' ? 'model' : 'user', parts: [{ text: msg.content }] }); }
+    }
+    const body = { contents, generationConfig: { temperature, maxOutputTokens: maxTokens } };
+    if (systemInstruction) body.systemInstruction = { parts: [{ text: systemInstruction }] };
+    const baseUrl = (provider.baseUrl || '').replace(/\/+$/, '');
+    const response = await fetch(`${baseUrl}/v1beta/models/${provider.model}:streamGenerateContent`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-goog-api-key': provider.apiKey },
+      body: JSON.stringify(body)
+    });
+    if (!response.ok) { const err = await response.text(); throw new Error(`Gemini API 错误 (${response.status}): ${err}`); }
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '', fullText = '';
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const matches = buffer.matchAll(/"text":\s*"((?:[^"\\]|\\.)*)"/g);
+      for (const m of matches) { const chunk = m[1].replace(/\\n/g, '\n').replace(/\\"/g, '"').replace(/\\\\/g, '\\'); fullText += chunk; onChunk(chunk); }
+      const lastBrace = buffer.lastIndexOf('}'); if (lastBrace !== -1) buffer = buffer.slice(lastBrace + 1);
+    }
+    return fullText;
+  }
+
   // localStorage 持久化
   const STORAGE_KEY = 'cardforge_api_settings';
   let _loaded = false;
@@ -282,6 +376,7 @@ export const useApiStore = defineStore('api', () => {
       baseUrl: '',
       apiKey: '',
       model: '',
+      temperature: 0.8,
       enabled: true
     });
     return id;

@@ -76,10 +76,32 @@
             placeholder="如：NPC要包含核心矛盾、地点要有互动提示、需要包含战斗规则...">
         </div>
 
+        <div class="flex-row mb-md" style="gap:16px">
+          <label class="toggle-label">
+            <input type="checkbox" v-model="wbStreamMode"> 流式生成
+          </label>
+          <label class="toggle-label">
+            <input type="checkbox" v-model="wbAutoContinue"> 自动继续下一批
+          </label>
+        </div>
+
         <button class="btn btn--primary btn--lg" style="width:100%" :disabled="aiGenerating || !aiWorldDesc.trim()"
           @click="handleAiGenerate">
           {{ aiGenerating ? `AI 正在生成... (${aiResults.length} 条)` : '开始生成世界书' }}
         </button>
+
+        <!-- 流式文本预览 -->
+        <div v-if="aiGenerating && wbStreamMode && wbStreamText" class="wb-stream-preview mt-md">
+          <div class="wb-stream-preview__label">流式输出中...</div>
+          <pre class="wb-stream-preview__text">{{ wbStreamText }}</pre>
+        </div>
+
+        <!-- 非自动继续时的暂停提示 -->
+        <div v-if="wbBatchPaused" class="mt-md flex-row">
+          <span class="hint" style="flex:1">已生成 {{ aiResults.length }} 条，还有 {{ aiBatchTotal - aiBatchCurrent }} 批未完成</span>
+          <button class="btn btn--primary btn--sm" @click="resumeBatch">继续下一批</button>
+          <button class="btn btn--ghost btn--sm" @click="wbBatchPaused = false; aiGenerating = false">停止</button>
+        </div>
 
         <!-- 生成进度条 -->
         <div v-if="aiGenerating" class="ai-progress mt-md">
@@ -378,7 +400,7 @@
             <span class="wb-entry__name">{{ entry.comment || '(未命名)' }}</span>
             <span v-if="entry.constant && entry.enabled" class="badge badge--warning">常驻</span>
             <span v-if="!entry.enabled" class="badge badge--danger">禁用</span>
-            <span v-if="entry.keys.length" class="wb-entry__keys">
+            <span v-if="entry.keys?.length" class="wb-entry__keys">
               {{ entry.keys.slice(0, 3).join(', ') }}{{ entry.keys.length > 3 ? '...' : '' }}
             </span>
           </div>
@@ -559,12 +581,12 @@
 </template>
 
 <script setup>
-import { ref, computed, nextTick } from 'vue';
+import { ref, computed, nextTick, watch } from 'vue';
 import { useCardStore } from '../stores/card.js';
 import { useApiStore } from '../stores/api.js';
 import { useAppStore } from '../stores/app.js';
 import { buildCardContext } from '../utils/card-context.js';
-import { chatForJsonArray } from '../utils/json-repair.js';
+import { chatForJsonArray, parseAiJsonArray } from '../utils/json-repair.js';
 
 const store = useCardStore();
 const apiStore = useApiStore();
@@ -865,6 +887,15 @@ const aiTargetCount = ref('small');
 const aiDescStyle = ref('auto');
 const aiExtraReq = ref('');
 const aiGenerating = ref(false);
+const wbStreamMode = ref(localStorage.getItem('cf_wb_stream_mode') === 'true');
+const wbAutoContinue = ref(localStorage.getItem('cf_wb_auto_continue') !== 'false');
+const wbStreamText = ref('');
+const wbBatchPaused = ref(false);
+let _resumeBatchResolve = null;
+watch(wbStreamMode, v => localStorage.setItem('cf_wb_stream_mode', v));
+watch(wbAutoContinue, v => localStorage.setItem('cf_wb_auto_continue', v));
+function resumeBatch() { wbBatchPaused.value = false; if (_resumeBatchResolve) { _resumeBatchResolve(); _resumeBatchResolve = null; } }
+async function waitForResume() { wbBatchPaused.value = true; await new Promise(resolve => { _resumeBatchResolve = resolve; }); }
 const aiResults = ref([]);
 const aiBatchCurrent = ref(0);
 const aiBatchTotal = ref(1);
@@ -944,12 +975,20 @@ ${aiWorldDesc.value}
 [{"comment":"条目名称","type":"类型","keys":["关键词"],"content":"内容（控制在200字以内）","constant":bool,"position":"before_char或after_char","insertion_order":数字}]
 只输出JSON数组，不要其他文字。${buildRefNovelSegment()}`;
 
+    const sysMsg = '你是SillyTavern世界书架构专家。始终输出合法JSON。所有内容必须用中文，禁止英文。每次严格只生成' + perBatch + '条，确保JSON完整。';
+    const maxTokens = apiStore.getModelMaxTokens(apiStore.activeProvider?.model);
+
     for (let batch = 0; batch < totalBatches; batch++) {
-      // Delay between batches to avoid rate limiting
-      if (batch > 0) await new Promise(r => setTimeout(r, 5000));
+      if (batch > 0) {
+        if (!wbAutoContinue.value) {
+          await waitForResume();
+          if (!aiGenerating.value) break;
+        } else {
+          await new Promise(r => setTimeout(r, 5000));
+        }
+      }
       aiBatchCurrent.value = batch + 1;
 
-      // Early stop: reached 80% of target
       if (aiResults.value.length >= targetMin && aiResults.value.length >= targetMax * 0.8) {
         appStore.toastSuccess(`已达到目标数量，提前完成`);
         break;
@@ -960,11 +999,21 @@ ${aiWorldDesc.value}
         ? `${basePrompt}\n\n## 生成要求\n- 条目类型：${typeLabels.join('、')}\n- 内容风格：${styleMap[aiDescStyle.value]}\n${aiExtraReq.value ? `- 额外要求：${aiExtraReq.value}\n` : ''}- 本批生成 ${perBatch} 条，覆盖最重要的设定`
         : `${basePrompt}\n\n## 生成要求\n- 条目类型：${typeLabels.join('、')}\n- 内容风格：${styleMap[aiDescStyle.value]}\n${aiExtraReq.value ? `- 额外要求：${aiExtraReq.value}\n` : ''}- 已生成的条目：${existingNames}\n- 请生成更多未覆盖的条目，不要重复已有的\n- 本批生成 ${perBatch} 条`;
 
+      const msgs = [
+        { role: 'system', content: sysMsg },
+        { role: 'user', content: batchPrompt }
+      ];
+
       try {
-        const parsed = await chatForJsonArray(apiStore, [
-          { role: 'system', content: '你是SillyTavern世界书架构专家。始终输出合法JSON。所有内容必须用中文，禁止英文。每次严格只生成' + perBatch + '条，确保JSON完整。' },
-          { role: 'user', content: batchPrompt }
-        ], { temperature: 0.7, maxTokens: apiStore.getModelMaxTokens(apiStore.activeProvider?.model) });
+        let parsed;
+        if (wbStreamMode.value) {
+          wbStreamText.value = '';
+          const fullText = await apiStore.chat(msgs, { temperature: 0.7, maxTokens, onChunk: chunk => { wbStreamText.value += chunk; } });
+          wbStreamText.value = '';
+          parsed = parseAiJsonArray(fullText);
+        } else {
+          parsed = await chatForJsonArray(apiStore, msgs, { temperature: 0.7, maxTokens });
+        }
 
         if (parsed.length === 0) {
           appStore.toastWarning(`第 ${batch + 1} 批未生成有效条目，停止生成`);
@@ -1538,6 +1587,9 @@ function syncPosition(entry) {
   color: var(--cf-text-muted);
   text-align: center;
 }
+.wb-stream-preview { background: rgba(0,0,0,0.2); border: 1px solid rgba(96,165,250,0.2); border-radius: var(--cf-radius-sm); padding: 10px; }
+.wb-stream-preview__label { font-size: 11px; color: var(--cf-accent); margin-bottom: 6px; }
+.wb-stream-preview__text { font-size: 12px; color: var(--cf-text-secondary); white-space: pre-wrap; word-break: break-all; max-height: 200px; overflow-y: auto; margin: 0; }
 
 .wb-entry {
   background: var(--cf-bg-secondary);

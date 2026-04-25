@@ -26,7 +26,7 @@
         <div class="sidebar__logo">
           <div class="sidebar__logo-text" style="font-size:15px">
             角色卡锻造炉
-            <span class="sub">v5.0</span>
+            <span class="sub">{{ appVersion }}</span>
           </div>
         </div>
 
@@ -253,6 +253,7 @@ const appStore = useAppStore();
 const niangStore = useAiNiangStore();
 
 // 错误日志弹窗
+const appVersion = ref('');
 const showErrorLog = ref(false);
 
 // 检查更新
@@ -447,5 +448,6 @@ onMounted(async () => {
   await apiStore.loadFromDisk();
   await loadDrawerHistoryFromDisk();
   window.addEventListener('beforeunload', () => { saveDrawerToHistory(); });
+  try { appVersion.value = 'v' + await api.getAppVersion(); } catch {}
 });
 </script>

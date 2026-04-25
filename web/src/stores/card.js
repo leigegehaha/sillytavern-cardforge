@@ -353,6 +353,16 @@ export const useCardStore = defineStore('card', () => {
     if (idx !== -1) { scripts.splice(idx, 1); markDirty(); }
   }
 
+  function reorderRegexScript(fromId, toId) {
+    const scripts = card.value.data.extensions.regex_scripts;
+    const fromIdx = scripts.findIndex(s => s.id === fromId);
+    const toIdx = scripts.findIndex(s => s.id === toId);
+    if (fromIdx === -1 || toIdx === -1 || fromIdx === toIdx) return;
+    const [item] = scripts.splice(fromIdx, 1);
+    scripts.splice(toIdx, 0, item);
+    markDirty();
+  }
+
   // Tavern script operations
   function addTavernScript(script = null) {
     const helper = card.value.data.extensions.tavern_helper;
@@ -399,7 +409,7 @@ export const useCardStore = defineStore('card', () => {
     cardData, worldEntries, regexScripts, tavernScripts, cardName, stats,
     newCard, loadFromJson, exportJson, exportPng, importFromFile, markDirty,
     addWorldEntry, removeWorldEntry, duplicateWorldEntry,
-    addRegexScript, removeRegexScript,
+    addRegexScript, removeRegexScript, reorderRegexScript,
     addTavernScript, removeTavernScript,
     addGreeting, removeGreeting,
     createEmptyWorldEntry, createEmptyRegexScript, createEmptyTavernScript,
