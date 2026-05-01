@@ -63,22 +63,49 @@ export function parseAiJsonArray(raw) {
     .replace(/[\x00-\x08\x0b\x0c\x0e-\x1f]/g, ''); // 非法控制字符（保留 \n \r \t）
 
   // 4. 多轮尝试解析
+  // 截断兜底：从结尾往前找最后一个完整 } ，截到那里 + 补 ]，让被 token 截掉的最后一条对象不污染前面所有完整对象
+  const trimToLastObject = (s) => {
+    const open = s.indexOf('[');
+    if (open === -1) return s;
+    let body = s.slice(open);
+    const lastBrace = body.lastIndexOf('}');
+    if (lastBrace === -1) return s;
+    body = body.slice(0, lastBrace + 1).replace(/,\s*$/, '') + ']';
+    return body;
+  };
+
   const attempts = [
     () => jsonStr,
     () => escapeNewlinesInStrings(jsonStr),
     () => jsonStr.replace(/[\r\n]+/g, ' '),
     () => repairUnescapedQuotes(jsonStr.replace(/[\r\n]+/g, ' ')),
+    () => trimToLastObject(repairUnescapedQuotes(jsonStr.replace(/[\r\n]+/g, ' '))),
+    () => trimToLastObject(jsonStr),
   ];
 
   let lastErr;
+  let lastAttemptStr = jsonStr;
   for (const attempt of attempts) {
     try {
-      return JSON.parse(attempt());
+      const s = attempt();
+      lastAttemptStr = s;
+      return JSON.parse(s);
     } catch (e) {
       lastErr = e;
     }
   }
-  throw new Error('AI 返回的 JSON 格式无法解析: ' + lastErr.message);
+
+  // 把出错位置前后 50 字符 + raw 前 200 字符带上，方便排查
+  let contextHint = '';
+  const posMatch = lastErr.message.match(/position (\d+)/);
+  if (posMatch) {
+    const pos = parseInt(posMatch[1]);
+    const start = Math.max(0, pos - 50);
+    const end = Math.min(lastAttemptStr.length, pos + 50);
+    contextHint = ` | 出错附近: "...${lastAttemptStr.slice(start, pos)}【ERR→】${lastAttemptStr.slice(pos, end)}..."`;
+  }
+  const rawHint = ' | 原始输出前200字: ' + String(raw || '').slice(0, 200).replace(/\s+/g, ' ');
+  throw new Error('AI 返回的 JSON 格式无法解析: ' + lastErr.message + contextHint + rawHint);
 }
 
 /** 转义 JSON 字符串值内部的原始换行符 */
@@ -98,13 +125,16 @@ function repairUnescapedQuotes(str) {
   const chars = [...str];
   const out = [];
   let inString = false;
-  let isKeyString = false; // 当前字符串是 key 还是 value
+  let isKeyString = false;
+  // 维护括号栈：栈顶 '[' 时当前在数组内，栈顶 '{' 时在对象内
+  // 数组里的字符串永远是 value；对象里看前一个非空白判断 key/value
+  const bracketStack = [];
   let i = 0;
 
-  // 找到当前位置之前最后一个非空白字符
-  function lastNonSpace() {
-    for (let k = out.length - 1; k >= 0; k--) {
-      if (out[k] !== ' ' && out[k] !== '\t') return out[k];
+  function prevNonSpaceFromOut(skipFromEnd) {
+    for (let k = out.length - skipFromEnd; k >= 0; k--) {
+      const c = out[k];
+      if (c !== ' ' && c !== '\t' && c !== '\n' && c !== '\r') return c;
     }
     return '';
   }
@@ -114,24 +144,25 @@ function repairUnescapedQuotes(str) {
 
     if (!inString) {
       out.push(ch);
-      if (ch === '"') {
+      if (ch === '{' || ch === '[') {
+        bracketStack.push(ch);
+      } else if (ch === '}' || ch === ']') {
+        bracketStack.pop();
+      } else if (ch === '"') {
         inString = true;
-        // 判断这是 key 还是 value：
-        // key 出现在 [ { , 之后；value 出现在 : 之后
-        const prev = lastNonSpace();
-        // 注意：lastNonSpace 返回的是 push 当前 " 之前的最后一个非空白字符
-        // 但我们刚 push 了 "，所以要看倒数第二个非空白
-        let prev2 = '';
-        for (let k = out.length - 2; k >= 0; k--) {
-          if (out[k] !== ' ' && out[k] !== '\t') { prev2 = out[k]; break; }
+        const top = bracketStack[bracketStack.length - 1];
+        if (top === '[') {
+          isKeyString = false;
+        } else {
+          // out 末位是刚 push 的 "，所以从 length-2 开始找前一个非空白
+          const prev2 = prevNonSpaceFromOut(2);
+          isKeyString = (prev2 === '{' || prev2 === ',');
         }
-        isKeyString = (prev2 === '{' || prev2 === ',' || prev2 === '[');
       }
       i++;
       continue;
     }
 
-    // 在字符串内部
     if (ch === '\\') {
       out.push(ch);
       i++;
@@ -140,13 +171,11 @@ function repairUnescapedQuotes(str) {
     }
 
     if (ch === '"') {
-      // 看后面跳过空白后的第一个字符
       let j = i + 1;
-      while (j < chars.length && (chars[j] === ' ' || chars[j] === '\t')) j++;
+      while (j < chars.length && (chars[j] === ' ' || chars[j] === '\t' || chars[j] === '\n' || chars[j] === '\r')) j++;
       const next = chars[j];
 
       if (isKeyString) {
-        // key 字符串：只有后面跟 : 才是正常结束
         if (next === ':') {
           out.push('"');
           inString = false;
@@ -154,8 +183,6 @@ function repairUnescapedQuotes(str) {
           out.push('\\"');
         }
       } else {
-        // value 字符串：后面跟 , } ] 才是正常结束
-        // 不允许 : 作为结束标志（value 内容可能包含冒号）
         if (next === ',' || next === '}' || next === ']' || next === undefined) {
           out.push('"');
           inString = false;

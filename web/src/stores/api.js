@@ -85,8 +85,11 @@ export const useApiStore = defineStore('api', () => {
     if (m.includes('gpt-4o') || m.includes('gpt-4-turbo') || m.includes('o1') || m.includes('o3') || m.includes('o4')) return 16384;
     if (m.includes('gpt-4')) return 8192;
     if (m.includes('gpt-3.5')) return 4096;
-    // Gemini
-    if (m.includes('gemini-2') || m.includes('gemini-1.5-pro')) return 8192;
+    // Gemini（新到旧）
+    if (m.includes('gemini-3') || m.includes('gemini-4')) return 65536;
+    if (m.includes('gemini-2.5') || m.includes('gemini-2-5')) return 65536;
+    if (m.includes('gemini-2')) return 32768;
+    if (m.includes('gemini-1.5-pro')) return 8192;
     if (m.includes('gemini')) return 8192;
     // DeepSeek / Qwen 等中转常见模型
     if (m.includes('deepseek')) return 8192;
@@ -97,7 +100,7 @@ export const useApiStore = defineStore('api', () => {
   async function _callProvider(provider, messages, options) {
     const temperature = options.temperature ?? provider.temperature ?? 0.8;
     const modelMax = getModelMaxTokens(provider.model);
-    const maxTokens = Math.min(options.maxTokens ?? 4096, modelMax);
+    const maxTokens = Math.min(options.maxTokens ?? modelMax, modelMax);
     const onChunk = options.onChunk || null;
 
     if (provider.type === 'openai') {

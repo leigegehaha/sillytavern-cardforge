@@ -401,7 +401,7 @@
             <span v-if="entry.constant && entry.enabled" class="badge badge--warning">常驻</span>
             <span v-if="!entry.enabled" class="badge badge--danger">禁用</span>
             <span v-if="entry.keys?.length" class="wb-entry__keys">
-              {{ entry.keys.slice(0, 3).join(', ') }}{{ entry.keys.length > 3 ? '...' : '' }}
+              {{ (entry.keys || []).slice(0, 3).join(', ') }}{{ (entry.keys || []).length > 3 ? '...' : '' }}
             </span>
           </div>
           <div class="flex-row" @click.stop>
@@ -420,7 +420,7 @@
             </div>
             <div class="form-group">
               <label>关键词 (keys)</label>
-              <input class="input" :value="entry.keys.join(', ')"
+              <input class="input" :value="(entry.keys || []).join(', ')"
                 @input="entry.keys = $event.target.value.split(',').map(k => k.trim()).filter(Boolean); store.markDirty()">
               <div class="hint">用逗号分隔多个关键词</div>
             </div>
@@ -497,7 +497,7 @@
 
           <div v-if="entry.selective" class="form-group mt-md">
             <label>二级关键词 (secondary_keys)</label>
-            <input class="input" :value="entry.secondary_keys.join(', ')"
+            <input class="input" :value="(entry.secondary_keys || []).join(', ')"
               @input="entry.secondary_keys = $event.target.value.split(',').map(k => k.trim()).filter(Boolean); store.markDirty()">
             <div class="hint">需要同时满足主关键词和二级关键词才触发</div>
           </div>
@@ -592,6 +592,26 @@ const store = useCardStore();
 const apiStore = useApiStore();
 const appStore = useAppStore();
 const entries = computed(() => store.worldEntries);
+
+// 把 AI 返回的世界书条目数组规范化：过滤空对象（comment/content 都没的丢掉）+ 补默认值
+// 修复 AI 截断或偷懒返回 [{}, {}, ...] 时塞一堆空白条目的 bug
+function normalizeAiEntries(parsed) {
+  if (!Array.isArray(parsed)) return [];
+  return parsed
+    .filter(item => item && typeof item === 'object' && (
+      (item.content && String(item.content).trim()) ||
+      (item.comment && String(item.comment).trim())
+    ))
+    .map(item => ({
+      ...item,
+      selected: true,
+      content: item.content || '',
+      keys: item.keys || [],
+      constant: item.constant ?? false,
+      position: item.position || 'before_char',
+      insertion_order: item.insertion_order || 100
+    }));
+}
 
 const showFilter = ref(false);
 const filterText = ref('');
@@ -768,15 +788,7 @@ ${baseInstruction}`;
           { role: 'user', content: chunkPrompt }
         ], { temperature: 0.7, maxTokens: apiStore.getModelMaxTokens(apiStore.activeProvider?.model) });
 
-        const newItems = parsed.map(item => ({
-          ...item,
-          selected: true,
-          content: item.content || '',
-          keys: item.keys || [],
-          constant: item.constant ?? false,
-          position: item.position || 'before_char',
-          insertion_order: item.insertion_order || 100
-        }));
+        const newItems = normalizeAiEntries(parsed);
         novelResults.value.push(...newItems);
       } catch (e) {
         appStore.toastWarning(`第 ${i + 1} 块提取出错: ${e.message}，继续下一块...`);
@@ -841,6 +853,7 @@ ${textPreview}
 
 ${novelExtra.value ? '【额外要求】\n' + novelExtra.value + '\n' : ''}
 
+重要：如果已经把小说里能提取的设定都提取完了，没有新条目可补，**直接输出空数组 []** 即可，禁止用空对象 {} 凑数。
 输出 JSON 数组格式，同之前。只输出JSON。`;
 
     const parsed = await chatForJsonArray(apiStore, [
@@ -848,12 +861,11 @@ ${novelExtra.value ? '【额外要求】\n' + novelExtra.value + '\n' : ''}
       { role: 'user', content: prompt }
     ], { temperature: 0.7, maxTokens: apiStore.getModelMaxTokens(apiStore.activeProvider?.model) });
 
-    const newItems = parsed.map(item => ({
-      ...item, selected: true,
-      content: item.content || '',
-      keys: item.keys || [], constant: item.constant ?? false,
-      position: item.position || 'before_char', insertion_order: item.insertion_order || 100
-    }));
+    const newItems = normalizeAiEntries(parsed);
+    if (newItems.length === 0) {
+      appStore.toastWarning('AI 返回全是空对象，继续提取失败');
+      return;
+    }
     novelResults.value.push(...newItems);
     appStore.toastSuccess(`又提取了 ${newItems.length} 条，共 ${novelResults.value.length} 条`);
   } catch (e) {
@@ -950,7 +962,7 @@ async function handleAiGenerate() {
     const targetMatch = targetRange.match(/(\d+)\s*[-~]\s*(\d+)/);
     const targetMin = targetMatch ? parseInt(targetMatch[1]) : 5;
     const targetMax = targetMatch ? parseInt(targetMatch[2]) : 15;
-    const perBatch = 8;
+    const perBatch = 30;
     const totalBatches = Math.max(1, Math.ceil(targetMax / perBatch));
 
     aiBatchTotal.value = totalBatches;
@@ -977,8 +989,9 @@ ${aiWorldDesc.value}
 [{"comment":"条目名称","type":"类型","keys":["关键词"],"content":"内容（控制在200字以内）","constant":bool,"position":"before_char或after_char","insertion_order":数字}]
 只输出JSON数组，不要其他文字。${buildRefNovelSegment()}`;
 
-    const sysMsg = '你是SillyTavern世界书架构专家。始终输出合法JSON。所有内容必须用中文，禁止英文。每次严格只生成' + perBatch + '条，确保JSON完整。';
+    const sysMsg = '你是SillyTavern世界书架构专家。始终输出合法JSON。所有内容必须用中文，禁止英文。每次严格只生成' + perBatch + '条，确保JSON完整。重要：content 字符串内部如果要引用别名、称号或直接引语，必须使用中文引号「」『』《》，禁止使用英文双引号 " "（会破坏 JSON 解析导致报错）。';
     const maxTokens = apiStore.getModelMaxTokens(apiStore.activeProvider?.model);
+    let rateRetryCount = 0; // 429 限流累计重试次数（全程共享 3 次）
 
     for (let batch = 0; batch < totalBatches; batch++) {
       if (batch > 0) {
@@ -986,7 +999,8 @@ ${aiWorldDesc.value}
           await waitForResume();
           if (!aiGenerating.value) break;
         } else {
-          await new Promise(r => setTimeout(r, 5000));
+          // 部分 API 服务商对 Pro 模型有 RPM 限速（5/分钟），间隔留 13 秒最稳
+          await new Promise(r => setTimeout(r, 13000));
         }
       }
       aiBatchCurrent.value = batch + 1;
@@ -1020,19 +1034,23 @@ ${aiWorldDesc.value}
         if (parsed.length === 0) {
           appStore.toastWarning(`第 ${batch + 1} 批未生成有效条目，停止生成`);
           break;
-        } else {
-          const newItems = parsed.map(item => ({
-            ...item,
-            selected: true,
-            content: item.content || '',
-            keys: item.keys || [],
-            constant: item.constant ?? false,
-            position: item.position || 'before_char',
-            insertion_order: item.insertion_order || 100
-          }));
-          aiResults.value.push(...newItems);
         }
+        const newItems = normalizeAiEntries(parsed);
+        if (newItems.length === 0) {
+          appStore.toastWarning(`第 ${batch + 1} 批 AI 返回全是空对象（截断或偷懒），停止生成`);
+          break;
+        }
+        aiResults.value.push(...newItems);
       } catch (e) {
+        const errMsg = String(e?.message || e || '');
+        const isRateLimit = /\b429\b/.test(errMsg) || /rate.?limit/i.test(errMsg) || /too many request/i.test(errMsg);
+        if (isRateLimit && rateRetryCount < 3) {
+          rateRetryCount++;
+          appStore.toastWarning(`第 ${batch + 1} 批触发限流（${rateRetryCount}/3 次重试），等 15 秒后自动重试...`);
+          await new Promise(r => setTimeout(r, 15000));
+          batch--; // 回退一步重试当前批
+          continue;
+        }
         appStore.toastWarning(`第 ${batch + 1} 批生成出错: ${e.message}`);
         break;
       }
@@ -1109,17 +1127,18 @@ ${cardContext}
 ${aiWorldDesc.value}
 
 请生成更多未覆盖的条目（NPC、地点、事件等），不要重复已有的。
+重要：如果已经覆盖完所有重要设定，没有新条目可补，**直接输出空数组 []** 即可，禁止用空对象 {} 凑数（那样会破坏后续处理）。
 输出JSON数组格式，同之前。只输出JSON。${buildRefNovelSegment()}`;
 
-    const newItems = (await chatForJsonArray(apiStore, [
+    const parsed = await chatForJsonArray(apiStore, [
       { role: 'system', content: '你是世界书架构专家。继续补充条目，不要重复。只输出JSON。所有内容必须用中文，禁止英文。' },
       { role: 'user', content: prompt }
-    ], { temperature: 0.7, maxTokens: apiStore.getModelMaxTokens(apiStore.activeProvider?.model) })).map(item => ({
-      ...item, selected: true,
-      content: item.content || '',
-      keys: item.keys || [], constant: item.constant ?? false,
-      position: item.position || 'before_char', insertion_order: item.insertion_order || 100
-    }));
+    ], { temperature: 0.7, maxTokens: apiStore.getModelMaxTokens(apiStore.activeProvider?.model) });
+    const newItems = normalizeAiEntries(parsed);
+    if (newItems.length === 0) {
+      appStore.toastWarning('AI 返回全是空对象（截断或偷懒），继续生成失败');
+      return;
+    }
     aiResults.value.push(...newItems);
     appStore.toastSuccess(`又生成了 ${newItems.length} 条，共 ${aiResults.value.length} 条`);
   } catch (e) {

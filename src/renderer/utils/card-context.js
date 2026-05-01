@@ -17,20 +17,35 @@ export function buildCardContext(cardStore) {
   if (d.description) lines.push(`角色描述（前500字）：${d.description.slice(0, 500)}`);
   if (d.first_mes) lines.push(`开场白（前1000字）：${d.first_mes.slice(0, 1000)}`);
 
-  // 世界书条目摘要
+  // 世界书 —— 真读 content 而不只是目录
   if (entries.length > 0) {
-    lines.push(`\n已有世界书：${entries.length} 条`);
     const enabled = entries.filter(e => e.enabled);
-    const constant = entries.filter(e => e.constant && e.enabled);
-    lines.push(`（启用 ${enabled.length} / 常驻 ${constant.length}）`);
+    const constant = enabled.filter(e => e.constant);
+    const triggered = enabled.filter(e => !e.constant);
 
-    // 列出前15条条目名和关键词
-    const summary = entries.slice(0, 15).map(e => {
-      const type = e.constant ? '常驻' : e.enabled ? '触发' : '禁用';
-      return `[${type}] ${e.comment || '(未命名)'} keys:[${(e.keys || []).join(',')}]`;
-    }).join('\n');
-    lines.push(summary);
-    if (entries.length > 15) lines.push(`...还有 ${entries.length - 15} 条`);
+    lines.push(`\n========== 世界书内容（${entries.length} 条，启用 ${enabled.length}）==========`);
+
+    // 常驻条目：完整内容（截断到 400 字），AI 会一直看到，必须给完整
+    if (constant.length > 0) {
+      lines.push(`\n--- 常驻设定（${constant.length} 条）---`);
+      for (const e of constant) {
+        const c = (e.content || '').slice(0, 400);
+        lines.push(`【${e.comment || '(未命名)'}】 keys:[${(e.keys || []).join(',')}]\n${c}${(e.content || '').length > 400 ? '...' : ''}`);
+      }
+    }
+
+    // 触发条目：前 20 条，content 前 150 字摘要
+    if (triggered.length > 0) {
+      const showCount = Math.min(20, triggered.length);
+      lines.push(`\n--- 关键词触发（${triggered.length} 条，展示前 ${showCount}）---`);
+      for (const e of triggered.slice(0, showCount)) {
+        const c = (e.content || '').slice(0, 150);
+        lines.push(`【${e.comment || '(未命名)'}】 keys:[${(e.keys || []).join(',')}]\n${c}${(e.content || '').length > 150 ? '...' : ''}`);
+      }
+      if (triggered.length > showCount) {
+        lines.push(`...还有 ${triggered.length - showCount} 条触发条目未展示`);
+      }
+    }
   }
 
   // 正则脚本
@@ -47,11 +62,6 @@ export function buildCardContext(cardStore) {
     scripts.slice(0, 5).forEach(s => {
       lines.push(`- ${s.name} [${s.enabled ? '启用' : '禁用'}]`);
     });
-  }
-
-  // 开场白
-  if (d.first_mes) {
-    lines.push(`\n开场白（前200字）：${d.first_mes.slice(0, 200)}`);
   }
 
   return lines.join('\n');
