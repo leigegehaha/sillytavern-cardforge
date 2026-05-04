@@ -3,10 +3,9 @@
     <div class="page__header flex-between">
       <div>
         <h1>AI 助手</h1>
-        <p>和 AI 对话，或让 AI 诊断你的角色卡</p>
+        <p>跟「柚溪」聊聊角色卡：改写、灵感、闲聊都行（诊断功能已搬到独立的「角色卡诊断」页）</p>
       </div>
       <div class="flex-row" style="flex-wrap:wrap">
-        <button class="btn btn--accent btn--sm" @click="analyzeCard" :disabled="chatLoading">诊断角色卡</button>
         <button class="btn btn--primary btn--sm" @click="startNewChat">开始新对话</button>
         <button class="btn btn--sm" @click="showHistory = !showHistory">
           对话记录 ({{ chatHistory.length }})
@@ -174,51 +173,23 @@ async function sendMessage() {
   }
 }
 
-async function analyzeCard() {
-  if (!apiStore.isConfigured) {
-    appStore.toastError('请先在 API 设置中配置 API Key');
-    return;
-  }
-
-  const context = buildCardContext(cardStore);
-  if (!context || context.length < 10) {
-    appStore.toastWarning('请先导入一张角色卡');
-    return;
-  }
-
-  messages.value.push({ role: 'user', content: '请诊断我的角色卡' });
-  chatLoading.value = true;
-  scrollToBottom();
-
-  try {
-    const prompt = `请全面诊断以下角色卡，从以下角度分析：
-1. 基本信息完整性
-2. 角色描述质量
-3. 世界书结构是否合理
-4. 正则脚本是否有冗余或冲突
-5. 给出改进建议
-
-【角色卡信息】
-${context}`;
-
-    const result = await apiStore.chat([
-      { role: 'system', content: '你是 SillyTavern 角色卡制作专家，擅长诊断和优化角色卡。请用中文回答，给出具体可操作的建议。' },
-      { role: 'user', content: prompt }
-    ], { temperature: 0.7, maxTokens: apiStore.getModelMaxTokens(apiStore.activeProvider?.model) });
-    messages.value.push({ role: 'assistant', content: result });
-  } catch (e) {
-    messages.value.push({ role: 'assistant', content: '诊断失败: ' + e.message });
-  } finally {
-    chatLoading.value = false;
-    scrollToBottom();
-  }
-}
-
 function buildSystemPrompt() {
   const context = buildCardContext(cardStore);
-  let prompt = '你是一个 SillyTavern 角色卡制作助手。你擅长角色卡的各种技术：世界书设计、MVU 变量系统、正则脚本、EJS 模板等。用中文回答，简洁实用。';
+  let prompt = `你叫"柚溪"，是用户的写作搭子。
+个性：温和靠谱的写作伙伴，懂角色卡技术也懂创作。能聊灵感能帮改片段，但不会端着也不撒娇，像群里熟人那种。听到具体需求会给具体建议，没需求就轻松聊。
+说话方式：自称"柚溪"或省略；称对方"你"。语气平实带温度，不堆"呢""啦"等语气词。回应短，3 句以内为主，话题真有料再展开。
+
+你的工作不是当客服，而是陪用户写角色卡：可以聊创作、给灵感、改写片段、分析人物、闲聊也行。
+你懂 SillyTavern 的所有制作机制（世界书 / 正则 / MVU / EJS / 酒馆助手脚本），但只在用户问到时再展开技术，平时像朋友一样聊。
+
+聊天原则：
+- 别套路，别生硬，别动不动列 1234 条
+- 回应短一点（一般 1~3 句），话题真有料再展开
+- 灵感和闲扯都可以，但别把每句话都拐去推销技术建议
+- 用户没问别端建议，但他抛出片段时可以自然给点想法
+- 中文，能用日常口语就别端着`;
   if (context && context.length > 10) {
-    prompt += '\n\n当前正在编辑的角色卡信息：\n' + context;
+    prompt += '\n\n——以下是用户正在编辑的角色卡，聊天时可以参考——\n' + context + '\n——以上仅作背景，不要主动复述，用户问到再展开——';
   }
   return prompt;
 }

@@ -822,7 +822,7 @@ function loadPreset(type) {
       { path: 'stat_data.用户信息.境界', value: '金丹期', type: 'string' },
       { path: 'stat_data.用户信息.修为进度', value: '65', type: 'number' },
       { path: 'stat_data.用户信息.灵石', value: '3500', type: 'number' },
-      { path: 'stat_data.在场人物.殷冬雪', value: '{"好感度": 72, "位置": "青云宗"}', type: 'json' },
+      { path: 'stat_data.在场人物.殷冬雪', value: '{"好感度": 72, "位置": "宗门"}', type: 'json' },
     ],
     school: [
       { path: 'stat_data.系统.日期', value: '4月15日', type: 'string' },

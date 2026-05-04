@@ -12,7 +12,19 @@ export default defineConfig({
   },
   build: {
     outDir: 'dist',
-    emptyOutDir: true
+    emptyOutDir: true,
+    rollupOptions: {
+      output: {
+        chunkFileNames: (chunkInfo) => {
+          const name = (chunkInfo.name || 'chunk').replace(/^_+/, '');
+          return `assets/${name}-[hash].js`;
+        },
+        entryFileNames: (chunkInfo) => {
+          const name = (chunkInfo.name || 'entry').replace(/^_+/, '');
+          return `assets/${name}-[hash].js`;
+        }
+      }
+    }
   },
   server: {
     port: 5174

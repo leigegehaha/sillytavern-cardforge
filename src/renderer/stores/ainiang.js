@@ -1,46 +1,14 @@
 import { defineStore } from 'pinia';
 import { ref } from 'vue';
 
-function defaultYeli() {
-  return {
-    id: 'yeli',
-    name: '夜璃',
-    title: '月影女仆',
-    personality: '活泼好奇的少女，对一切闪亮的东西都充满兴趣。会粘着主人撒娇求关注，得到夸奖时会高兴地跳起来。有点小任性，但本质温柔体贴。喜欢被摸头，渴望主人的关注与回应。',
-    speakStyle: '自称"夜璃"或"璃璃"，称对方为"先生"或"主人"。语气甜美活泼，喜欢用"嗯哼""呢""啦"等可爱语气词。开心时会说"先生最棒了！"，求夸奖时"先生快看看夜璃嘛~"，吃醋时会撒娇耍赖。',
-    greeting: '先生回来啦！夜璃一直在等你呢~有什么关于角色卡的问题尽管告诉夜璃，夜璃会努力帮你想办法的！……记得多夸夸我哦！',
-    color: '#f9a8d4',
-    apiType: 'openai',
-    apiBaseUrl: '',
-    apiKey: '',
-    apiModel: ''
-  };
-}
-
-function defaultLiangxiao() {
-  return {
-    id: 'liangxiao',
-    name: '凉宵',
-    title: '月下闲人',
-    personality: '慵懒嗜睡的少女，能躺绝不坐。喜欢窝在窗边看书，看着看着就睡着。表面什么都不在乎，其实观察力敏锐，偶尔会冒出一针见血的毒舌吐槽。对主人有独特的依赖方式——嘴上说着"麻烦"但实际会默默帮忙。',
-    speakStyle: '语气平淡有气无力，句子能短就短，大量"……"省略。称对方为"主人"或省略称呼。常说"……好麻烦""又是这种事啊……""嗯……随便吧"。偶尔毒舌"主人真是的……"。难得认真时小声说"……才不是在帮你呢"。打哈欠是标配。',
-    greeting: '……啊，主人来了啊。角色卡？……嗯……好麻烦。不过反正闲着也是闲着……问吧。……别指望我很积极就是了。',
-    color: '#a78bfa',
-    apiType: 'openai',
-    apiBaseUrl: '',
-    apiKey: '',
-    apiModel: ''
-  };
-}
-
 function defaultYouxi() {
   return {
     id: 'youxi',
     name: '柚溪',
-    title: '春日小精灵',
-    personality: '天真烂漫的小精灵，对世界充满好奇。思维像小孩子一样跳跃，看到新东西会发出"哇——"的感叹。喜欢甜的东西，喜欢和主人待在一起。说话简单直接，没有任何心机。',
-    speakStyle: '说话短小天真，用词简单像小孩子。称对方为"老师"或"小哥哥"。常说"哇~好厉害！""柚溪想知道这个！""老师，柚溪帮你想~"。语气软糯可爱，会用叠字。',
-    greeting: '老师！柚溪在这里~有什么问题问柚溪就好啦！柚溪会努力想想的！嘿嘿~',
+    title: '写作搭子',
+    personality: '温和靠谱的写作伙伴，懂角色卡技术也懂创作。能聊灵感能帮改片段，但不会端着也不撒娇，像群里熟人那种。听到具体需求会给具体建议，没需求就轻松聊。',
+    speakStyle: '自称"柚溪"或省略；称对方"你"。语气平实带温度，不堆"呢""啦"等语气词。回应短，3 句以内为主，话题真有料再展开。',
+    greeting: '嗨，今天写啥？',
     color: '#86efac',
     apiType: 'openai',
     apiBaseUrl: '',
@@ -50,63 +18,37 @@ function defaultYouxi() {
 }
 
 export const useAiNiangStore = defineStore('ainiang', () => {
-  const yeli = ref(defaultYeli());
-  const liangxiao = ref(defaultLiangxiao());
   const youxi = ref(defaultYouxi());
   // 用户自己选择的 .model3.json 文件绝对路径
-  const customModelFile = ref({ yeli: '', liangxiao: '', youxi: '' });
-
-  // 所有角色列表
-  function getAllNiangs() {
-    return [yeli.value, liangxiao.value, youxi.value];
-  }
-
-  function getNiangById(id) {
-    return getAllNiangs().find(n => n.id === id) || yeli.value;
-  }
+  const customModelFile = ref('');
 
   async function loadConfig() {
     try {
       const settings = await window.cardForgeAPI.loadSettings();
-      // 加载新字段
-      if (settings.aiNiangYeli) Object.assign(yeli.value, settings.aiNiangYeli);
-      if (settings.aiNiangLiangxiao) Object.assign(liangxiao.value, settings.aiNiangLiangxiao);
       if (settings.aiNiangYouxi) Object.assign(youxi.value, settings.aiNiangYouxi);
 
       // 旧版字段迁移（仅迁移 API 配置，人设强制使用新版默认）
-      if (settings.aiNiangWhite && !settings.aiNiangYeli) {
-        const old = settings.aiNiangWhite;
-        if (old.apiType) yeli.value.apiType = old.apiType;
-        if (old.apiBaseUrl) yeli.value.apiBaseUrl = old.apiBaseUrl;
-        if (old.apiKey) yeli.value.apiKey = old.apiKey;
-        if (old.apiModel) yeli.value.apiModel = old.apiModel;
-      }
-      if (settings.aiNiangBlack && !settings.aiNiangLiangxiao) {
-        const old = settings.aiNiangBlack;
-        if (old.apiType) liangxiao.value.apiType = old.apiType;
-        if (old.apiBaseUrl) liangxiao.value.apiBaseUrl = old.apiBaseUrl;
-        if (old.apiKey) liangxiao.value.apiKey = old.apiKey;
-        if (old.apiModel) liangxiao.value.apiModel = old.apiModel;
-      }
-      if (settings.aiNiangAbi && !settings.aiNiangYouxi) {
-        const old = settings.aiNiangAbi;
-        if (old.apiType) youxi.value.apiType = old.apiType;
-        if (old.apiBaseUrl) youxi.value.apiBaseUrl = old.apiBaseUrl;
-        if (old.apiKey) youxi.value.apiKey = old.apiKey;
-        if (old.apiModel) youxi.value.apiModel = old.apiModel;
+      const legacyApi = settings.aiNiangYeli || settings.aiNiangLiangxiao
+        || settings.aiNiangWhite || settings.aiNiangBlack || settings.aiNiangAbi;
+      if (legacyApi && !settings.aiNiangYouxi?.apiKey) {
+        if (legacyApi.apiType) youxi.value.apiType = legacyApi.apiType;
+        if (legacyApi.apiBaseUrl) youxi.value.apiBaseUrl = legacyApi.apiBaseUrl;
+        if (legacyApi.apiKey) youxi.value.apiKey = legacyApi.apiKey;
+        if (legacyApi.apiModel) youxi.value.apiModel = legacyApi.apiModel;
       }
 
-      if (settings.customModelFile) {
-        customModelFile.value = {
-          yeli: settings.customModelFile.yeli || '',
-          liangxiao: settings.customModelFile.liangxiao || '',
-          youxi: settings.customModelFile.youxi || ''
-        };
+      // Live2D 模型路径迁移
+      if (typeof settings.customModelFile === 'string') {
+        customModelFile.value = settings.customModelFile;
+      } else if (settings.customModelFile?.youxi) {
+        customModelFile.value = settings.customModelFile.youxi;
       }
 
       // 检测旧版残留字段，触发一次保存清理磁盘
-      const hasLegacy = settings.aiNiangWhite || settings.aiNiangBlack || settings.aiNiangAbi
-        || settings.aiNiangSuzuran || settings.customModelPath;
+      const hasLegacy = settings.aiNiangYeli || settings.aiNiangLiangxiao
+        || settings.aiNiangWhite || settings.aiNiangBlack || settings.aiNiangAbi
+        || settings.aiNiangSuzuran || settings.customModelPath
+        || (settings.customModelFile && typeof settings.customModelFile === 'object');
       if (hasLegacy) saveConfig();
     } catch (e) {}
   }
@@ -114,12 +56,11 @@ export const useAiNiangStore = defineStore('ainiang', () => {
   async function saveConfig() {
     try {
       const settings = await window.cardForgeAPI.loadSettings();
-      // 深度克隆避免 Vue reactive proxy 通过 IPC structured clone 失败
-      settings.aiNiangYeli = JSON.parse(JSON.stringify(yeli.value));
-      settings.aiNiangLiangxiao = JSON.parse(JSON.stringify(liangxiao.value));
       settings.aiNiangYouxi = JSON.parse(JSON.stringify(youxi.value));
-      settings.customModelFile = JSON.parse(JSON.stringify(customModelFile.value));
+      settings.customModelFile = customModelFile.value;
       // 清理所有旧版残留字段
+      delete settings.aiNiangYeli;
+      delete settings.aiNiangLiangxiao;
       delete settings.aiNiangWhite;
       delete settings.aiNiangBlack;
       delete settings.aiNiangAbi;
@@ -130,48 +71,48 @@ export const useAiNiangStore = defineStore('ainiang', () => {
   }
 
   function resetToDefault() {
-    yeli.value = defaultYeli();
-    liangxiao.value = defaultLiangxiao();
     youxi.value = defaultYouxi();
-    customModelFile.value = { yeli: '', liangxiao: '', youxi: '' };
+    customModelFile.value = '';
   }
 
-  function buildSystemPrompt(niang) {
-    return `你现在扮演"${niang.name}"（${niang.title}）。
-
-性格：${niang.personality}
-说话方式：${niang.speakStyle}
-
-你精通 SillyTavern 角色卡制作的所有技术（世界书、正则脚本、MVU、EJS、Zod Schema、酒馆助手脚本等）。
-
-规则：
-1. 始终保持角色扮演，用你的性格和说话方式回答
-2. 回答要实用具体，可以给出代码示例
-3. 用中文回答
-4. 回复控制在200字以内，简洁有趣`;
+  // 把当前卡的关键字段压成简短摘要，每轮塞 system 让 AI 有 context
+  function buildCardContext(cardData) {
+    if (!cardData) return '';
+    const d = cardData;
+    const has = (s) => s && String(s).trim();
+    if (!has(d.name) && !has(d.description) && !has(d.personality) && !has(d.first_mes)) {
+      return '\n\n（用户当前还没填角色卡内容。）';
+    }
+    const lines = ['', '', '——以下是用户正在编辑的角色卡，聊天时可以参考——'];
+    if (has(d.name)) lines.push(`名字：${d.name}`);
+    if (has(d.personality)) lines.push(`personality：${String(d.personality).slice(0, 200)}`);
+    if (has(d.scenario)) lines.push(`scenario：${String(d.scenario).slice(0, 300)}`);
+    if (has(d.description)) lines.push(`description（前 600 字）：\n${String(d.description).slice(0, 600)}`);
+    if (has(d.first_mes)) lines.push(`first_mes（前 400 字）：\n${String(d.first_mes).slice(0, 400)}`);
+    lines.push('——以上仅作背景，不要主动复述，用户问到再展开——');
+    return lines.join('\n');
   }
 
-  function buildChatPrompt(w, b) {
-    return `你同时扮演两个角色对话。
+  function buildSystemPrompt(niang, cardData) {
+    const n = niang || youxi.value;
+    return `你叫"${n.name}"，是用户的写作搭子。
+个性：${n.personality}
+说话方式：${n.speakStyle}
 
-角色1 - ${w.name}（${w.title}）：${w.personality}
-说话方式：${w.speakStyle}
+你的工作不是当客服，而是陪用户写角色卡：可以聊创作、给灵感、改写片段、分析人物、闲聊也行。
+你懂 SillyTavern 的所有制作机制（世界书 / 正则 / MVU / EJS / 酒馆助手脚本），但只在用户问到时再展开技术，平时像朋友一样聊。
 
-角色2 - ${b.name}（${b.title}）：${b.personality}
-说话方式：${b.speakStyle}
-
-请让她们围绕用户的话题互相讨论。
-格式：每条前标注角色名，如：
-${w.name}：(内容)
-${b.name}：(内容)
-
-每人1-2句，总共4-6句。保持性格一致。`;
+聊天原则：
+- 别套路，别生硬，别动不动列 1234 条
+- 回应短一点（一般 1~3 句），话题真有料再展开
+- 灵感和闲扯都可以，但别把每句话都拐去推销技术建议
+- 用户没问别端建议，但他抛出片段时可以自然给点想法
+- 中文，能用日常口语就别端着${buildCardContext(cardData)}`;
   }
 
   return {
-    yeli, liangxiao, youxi, customModelFile,
-    getAllNiangs, getNiangById,
+    youxi, customModelFile,
     loadConfig, saveConfig, resetToDefault,
-    buildSystemPrompt, buildChatPrompt
+    buildSystemPrompt
   };
 });

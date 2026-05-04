@@ -5,47 +5,47 @@
         <h1>AI 助手</h1>
       </div>
       <div class="flex-row">
-        <button v-for="n in niangStore.getAllNiangs()" :key="n.id"
-          :class="['btn btn--sm', mode === n.id ? 'btn--primary' : 'btn--secondary']"
-          @click="mode = n.id; switchModel(n.id)">{{ n.name }}</button>
-        <button class="btn btn--secondary btn--sm" @click="analyzeCard">诊断角色卡</button>
         <button class="btn btn--accent btn--sm" @click="startNewChat">开始新对话</button>
-        <button class="btn btn--secondary btn--sm" @click="showHistory = !showHistory; showConfig = false; showModelConfig = false">
+        <button class="btn btn--secondary btn--sm" @click="showHistory = !showHistory; showConfig = false; showModelConfig = false; settingsOpen = false">
           对话记录 ({{ chatHistory.length }})
         </button>
-        <button class="btn btn--ghost btn--sm" @click="showConfig = !showConfig; showModelConfig = false; showHistory = false">设置</button>
-        <button class="btn btn--ghost btn--sm" @click="showModelConfig = !showModelConfig; showConfig = false; showHistory = false">密钥</button>
+        <div class="settings-pop">
+          <button class="btn btn--ghost btn--sm" @click="settingsOpen = !settingsOpen; showHistory = false; showConfig = false; showModelConfig = false">⚙</button>
+          <div v-if="settingsOpen" class="settings-pop__menu">
+            <label class="settings-pop__item">
+              <input type="checkbox" v-model="live2dVisible" @change="onToggleLive2D">
+              显示 Live2D 模型
+            </label>
+            <button class="settings-pop__btn" @click="showConfig = true; showModelConfig = false; showHistory = false; settingsOpen = false">人设配置</button>
+            <button class="settings-pop__btn" @click="showModelConfig = true; showConfig = false; showHistory = false; settingsOpen = false">API 密钥</button>
+          </div>
+        </div>
       </div>
     </div>
 
-    <!-- 配置面板 -->
+    <!-- 人设配置面板 -->
     <div v-if="showConfig" class="card mb-md">
       <div class="card__header flex-between">
-        <h3>AI 娘配置</h3>
+        <h3>柚溪人设</h3>
         <div class="flex-row">
           <button class="btn btn--secondary btn--sm" @click="niangStore.resetToDefault(); appStore.toastSuccess('已重置')">恢复默认</button>
           <button class="btn btn--primary btn--sm" @click="niangStore.saveConfig(); showConfig = false; appStore.toastSuccess('已保存')">保存</button>
         </div>
       </div>
       <div class="card__body">
-        <div class="grid-3">
-          <div v-for="n in niangStore.getAllNiangs()" :key="n.id">
-            <h4 :style="{ color: n.color }">{{ n.name }}</h4>
-            <div class="form-group"><label>名字</label><input class="input" v-model="n.name"></div>
-            <div class="form-group"><label>头衔</label><input class="input" v-model="n.title"></div>
-            <div class="form-group"><label>性格</label><textarea class="textarea" v-model="n.personality" rows="3"></textarea></div>
-            <div class="form-group"><label>说话方式</label><textarea class="textarea" v-model="n.speakStyle" rows="2"></textarea></div>
-            <div class="form-group"><label>打招呼</label><input class="input" v-model="n.greeting"></div>
-            <div class="form-group">
-              <label>Live2D 模型文件</label>
-              <div class="flex-row">
-                <input class="input flex-1" :value="niangStore.customModelFile[n.id]" readonly placeholder="未配置 — 点右侧选择 .model3.json">
-                <button class="btn btn--secondary btn--sm" @click="selectCustomModel(n.id)">选择</button>
-                <button class="btn btn--ghost btn--sm" v-if="niangStore.customModelFile[n.id]" @click="niangStore.customModelFile[n.id] = ''">清除</button>
-              </div>
-              <div class="hint">选择 .model3.json 文件（同目录下需有对应的 .moc3 和贴图）</div>
-            </div>
+        <div class="form-group"><label>名字</label><input class="input" v-model="niangStore.youxi.name"></div>
+        <div class="form-group"><label>头衔</label><input class="input" v-model="niangStore.youxi.title"></div>
+        <div class="form-group"><label>性格</label><textarea class="textarea" v-model="niangStore.youxi.personality" rows="3"></textarea></div>
+        <div class="form-group"><label>说话方式</label><textarea class="textarea" v-model="niangStore.youxi.speakStyle" rows="2"></textarea></div>
+        <div class="form-group"><label>打招呼</label><input class="input" v-model="niangStore.youxi.greeting"></div>
+        <div class="form-group">
+          <label>Live2D 模型文件</label>
+          <div class="flex-row">
+            <input class="input flex-1" :value="niangStore.customModelFile" readonly placeholder="未配置 — 点右侧选择 .model3.json">
+            <button class="btn btn--secondary btn--sm" @click="selectCustomModel">选择</button>
+            <button class="btn btn--ghost btn--sm" v-if="niangStore.customModelFile" @click="niangStore.customModelFile = ''">清除</button>
           </div>
+          <div class="hint">选择 .model3.json 文件（同目录下需有对应的 .moc3 和贴图）</div>
         </div>
       </div>
     </div>
@@ -59,41 +59,34 @@
         </div>
       </div>
       <div class="card__body">
-        <p class="hint mb-md">为每个角色配置独立的 AI 模型，留空则使用全局 API 设置</p>
-        <div v-for="n in niangStore.getAllNiangs()" :key="n.id" class="model-config-item mb-md">
-          <h4 :style="{ color: n.color, cursor: 'pointer' }" @click="modelConfigExpand[n.id] = !modelConfigExpand[n.id]">
-            {{ modelConfigExpand[n.id] ? '▼' : '▶' }} {{ n.name }}
-          </h4>
-          <div v-if="modelConfigExpand[n.id]">
-            <div class="grid-2">
-              <div class="form-group">
-                <label>API 类型</label>
-                <select class="select" v-model="n.apiType">
-                  <option value="openai">OpenAI 兼容</option>
-                  <option value="claude">Claude (Anthropic)</option>
-                  <option value="gemini">Gemini (Google)</option>
-                </select>
-              </div>
-              <div class="form-group">
-                <label>Base URL</label>
-                <input class="input" v-model="n.apiBaseUrl" placeholder="留空跟随全局">
-              </div>
+        <p class="hint mb-md">为柚溪配置独立的 AI 模型，留空则使用全局 API 设置</p>
+        <div class="grid-2">
+          <div class="form-group">
+            <label>API 类型</label>
+            <select class="select" v-model="niangStore.youxi.apiType">
+              <option value="openai">OpenAI 兼容</option>
+              <option value="claude">Claude (Anthropic)</option>
+              <option value="gemini">Gemini (Google)</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Base URL</label>
+            <input class="input" v-model="niangStore.youxi.apiBaseUrl" placeholder="留空跟随全局">
+          </div>
+        </div>
+        <div class="grid-2">
+          <div class="form-group">
+            <label>API Key</label>
+            <div class="flex-row">
+              <input :type="showKey ? 'text' : 'password'" class="input flex-1" v-model="niangStore.youxi.apiKey" placeholder="留空跟随全局">
+              <button class="btn btn--ghost btn--sm" @click="showKey = !showKey">
+                {{ showKey ? '隐藏' : '显示' }}
+              </button>
             </div>
-            <div class="grid-2">
-              <div class="form-group">
-                <label>API Key</label>
-                <div class="flex-row">
-                  <input :type="showKeys[n.id] ? 'text' : 'password'" class="input flex-1" v-model="n.apiKey" placeholder="留空跟随全局">
-                  <button class="btn btn--ghost btn--sm" @click="showKeys[n.id] = !showKeys[n.id]">
-                    {{ showKeys[n.id] ? '隐藏' : '显示' }}
-                  </button>
-                </div>
-              </div>
-              <div class="form-group">
-                <label>模型名称</label>
-                <input class="input" v-model="n.apiModel" placeholder="如 gpt-4o, claude-sonnet-4-20250514">
-              </div>
-            </div>
+          </div>
+          <div class="form-group">
+            <label>模型名称</label>
+            <input class="input" v-model="niangStore.youxi.apiModel" placeholder="如 gpt-4o, claude-sonnet-4-20250514">
           </div>
         </div>
       </div>
@@ -157,9 +150,9 @@
       </div>
     </div>
 
-    <!-- Live2D 模型（可拖动，设置面板打开时隐藏） -->
+    <!-- Live2D 模型（可拖动，默认隐藏，齿轮里可开） -->
     <div class="model-container"
-      v-show="!showConfig && !showModelConfig"
+      v-show="live2dVisible && !showConfig && !showModelConfig"
       :class="{ 'is-dragging': dragging === 'model' }"
       :style="{ left: modelPos.x + 'px', top: modelPos.y + 'px' }"
       @mousedown.prevent="startDrag($event, 'model')">
@@ -185,13 +178,24 @@ const messages = ref([]);
 const inputText = ref('');
 const loading = ref(false);
 const messagesRef = ref(null);
-const mode = ref('youxi');
 const showConfig = ref(false);
 const showModelConfig = ref(false);
 const showHistory = ref(false);
-const showKeys = reactive({});
-const modelConfigExpand = reactive({});
+const settingsOpen = ref(false);
+const showKey = ref(false);
+const live2dVisible = ref(localStorage.getItem('cf_live2d_visible') === '1');
+let live2dInited = false;
 let msgId = 0;
+
+const activeNiang = computed(() => niangStore.youxi);
+
+async function onToggleLive2D() {
+  localStorage.setItem('cf_live2d_visible', live2dVisible.value ? '1' : '0');
+  if (live2dVisible.value && !live2dInited) {
+    await initLive2D();
+    live2dInited = true;
+  }
+}
 
 // 对话历史
 const chatHistory = ref([]);
@@ -264,9 +268,6 @@ const sharedCanvas = ref(null);
 // 可拖动位置
 const modelPos = reactive({ x: 20, y: 300 });
 
-// 当前显示的角色
-const activeNiang = computed(() => niangStore.getNiangById(mode.value));
-
 let dragging = null;
 let dragOffset = { x: 0, y: 0 };
 
@@ -282,7 +283,7 @@ function onMouseMove(e) {
 }
 function onMouseUp() { dragging = null; }
 
-async function selectCustomModel(which) {
+async function selectCustomModel() {
   const file = await window.cardForgeAPI.openFile({
     filters: [
       { name: 'Live2D 模型', extensions: ['model3.json', 'json'] },
@@ -294,8 +295,8 @@ async function selectCustomModel(which) {
       appStore.toastError('请选择 .model3.json 文件');
       return;
     }
-    niangStore.customModelFile[which] = file;
-    appStore.toastSuccess('模型已设置，保存配置后切换角色生效');
+    niangStore.customModelFile = file;
+    appStore.toastSuccess('模型已设置，保存配置后生效');
   }
 }
 
@@ -308,8 +309,11 @@ onMounted(async () => {
   modelPos.x = window.innerWidth - 320;
   modelPos.y = window.innerHeight - 470;
 
-  // 用同一个 PIXI.Application 加载两个模型
-  await initBothModels();
+  // Live2D 默认隐藏，只有用户开过才 init
+  if (live2dVisible.value) {
+    await initLive2D();
+    live2dInited = true;
+  }
 
   // 关闭窗口时自动保存当前对话
   window.addEventListener('beforeunload', () => { saveCurrentToHistory(); });
@@ -342,7 +346,7 @@ let currentModel = null;
 let Live2DModelClass = null;
 let resourcePath = '';
 
-async function initBothModels() {
+async function initLive2D() {
   try {
     if (!sharedCanvas.value) return;
 
@@ -370,34 +374,16 @@ async function initBothModels() {
     const resPath = await window.cardForgeAPI.getResourcePath();
     resourcePath = resPath.replace(/\\/g, '/');
 
-    // 根据当前模式加载对应模型
-    await switchModel(mode.value);
+    const modelFilePath = niangStore.customModelFile;
+    if (!modelFilePath) return;
 
+    try {
+      await loadLive2DModel(modelFilePath, niangStore.youxi);
+    } catch (e) {
+      appStore.toastError('柚溪 模型加载失败');
+    }
   } catch (e) {
     appStore.toastError('Live2D 初始化失败');
-  }
-}
-
-async function switchModel(which) {
-  if (!live2dApp) return;
-
-  // 清除当前模型
-  if (currentModel) {
-    live2dApp.stage.removeChild(currentModel);
-    currentModel.destroy();
-    currentModel = null;
-  }
-
-  const niang = niangStore.getNiangById(which);
-  const modelFilePath = niangStore.customModelFile[niang.id];
-
-  // 没有配置模型 — 不加载，让画布空白
-  if (!modelFilePath) return;
-
-  try {
-    await loadLive2DModel(modelFilePath, niang);
-  } catch (e) {
-    appStore.toastError(niang.name + ' 模型加载失败');
   }
 }
 
@@ -439,119 +425,6 @@ async function scrollBottom() {
   if (messagesRef.value) messagesRef.value.scrollTop = messagesRef.value.scrollHeight;
 }
 
-async function analyzeCard() {
-  if (!apiStore.isConfigured && !activeNiang.value.apiKey) {
-    appStore.toastError('请先配置 API Key');
-    return;
-  }
-
-  // 让用户选择角色卡文件
-  const filePath = await window.cardForgeAPI.openFile();
-  if (!filePath) return;
-
-  try {
-    let cardJson;
-    if (filePath.endsWith('.json')) {
-      const result = await window.cardForgeAPI.readTextFile(filePath);
-      if (!result.success) throw new Error(result.error);
-      cardJson = JSON.parse(result.data);
-    } else if (filePath.endsWith('.png')) {
-      const result = await window.cardForgeAPI.extractCharaData(filePath);
-      if (!result.success) throw new Error(result.error);
-      cardJson = result.data;
-    } else {
-      throw new Error('只支持 PNG 和 JSON 格式');
-    }
-
-    const d = cardJson.data || cardJson;
-    const entries = d.character_book?.entries || [];
-    const regexScripts = d.extensions?.regex_scripts || [];
-    const th = d.extensions?.tavern_helper;
-    let scripts = [];
-    if (th) {
-      scripts = Array.isArray(th) ? (th.find(e => e[0] === 'scripts')?.[1] || []) : (th.scripts || []);
-    }
-
-    // 构建角色卡摘要
-    const enabledEntries = entries.filter(e => e.enabled);
-    const constantEntries = entries.filter(e => e.constant && e.enabled);
-    const disabledEntries = entries.filter(e => !e.enabled);
-    const entryNames = entries.slice(0, 20).map(e =>
-      `[${e.constant ? '常驻' : e.enabled ? '触发' : '禁用'}] ${e.comment || '(未命名)'} keys:[${(e.keys || []).join(',')}] order:${e.insertion_order}`
-    ).join('\n');
-
-    const summary = `角色卡诊断请求：
-
-【基本信息】
-角色名：${d.name || '(空)'}
-description：${(d.description || '').length} 字${d.description ? '' : '（空）'}
-personality：${d.personality || '(空)'}
-scenario：${(d.scenario || '').length} 字${d.scenario ? '' : '（空）'}
-first_mes：${(d.first_mes || '').length} 字${d.first_mes ? '' : '（空）'}
-mes_example：${(d.mes_example || '').length} 字${d.mes_example ? '' : '（空）'}
-system_prompt：${(d.system_prompt || '').length} 字
-alternate_greetings：${(d.alternate_greetings || []).length} 个
-
-【世界书】
-总条目：${entries.length} 条
-启用：${enabledEntries.length} / 常驻：${constantEntries.length} / 禁用：${disabledEntries.length}
-条目列表（前20条）：
-${entryNames || '(无条目)'}
-
-【正则脚本】${regexScripts.length} 个
-${regexScripts.slice(0, 5).map(r => `- ${r.scriptName} [${r.markdownOnly ? 'markdownOnly' : r.promptOnly ? 'promptOnly' : '双层'}]`).join('\n') || '(无)'}
-
-【酒馆助手脚本】${scripts.length} 个
-${scripts.slice(0, 5).map(s => `- ${s.name} [${s.enabled ? '启用' : '禁用'}]`).join('\n') || '(无)'}
-
-${d.description ? '\n【description 内容（前500字）】\n' + d.description.slice(0, 500) : ''}
-${d.first_mes ? '\n【first_mes 内容（前500字）】\n' + d.first_mes.slice(0, 500) : ''}`;
-
-    messages.value.push({
-      id: ++msgId, role: 'user', name: '你',
-      content: '请诊断这张角色卡：' + (d.name || '未命名'),
-      color: '#f59e42'
-    });
-
-    loading.value = true;
-    await scrollBottom();
-
-    const niang = activeNiang.value;
-    const sysPrompt = `${niangStore.buildSystemPrompt(niang)}
-
-你现在要诊断一张 SillyTavern 角色卡。请从以下几个方面分析：
-
-1.【问题诊断】找出角色卡中存在的问题（如字段缺失、世界书设计不合理、正则配置错误、Token浪费等）
-2.【解决方案】针对每个问题给出具体的解决方法
-3.【优化建议】给出提升角色卡质量的建议（如角色描写、世界书组织、关键词设计、开场白改进等）
-4.【评分】给出1-10分的评分和理由
-
-用你的角色性格来回答，保持角色扮演。`;
-
-    const chatMsgs = [
-      { role: 'system', content: sysPrompt },
-      { role: 'user', content: summary }
-    ];
-
-    let result;
-    if (niang.apiKey && niang.apiBaseUrl && niang.apiModel) {
-      const tempProvider = { id: 'diag_temp', type: niang.apiType || 'openai', baseUrl: niang.apiBaseUrl, apiKey: niang.apiKey, model: niang.apiModel, enabled: true };
-      result = await apiStore.chatWithProvider(tempProvider, chatMsgs, { temperature: 0.7, maxTokens: apiStore.getModelMaxTokens(tempProvider.model) });
-    } else {
-      result = await apiStore.chat(chatMsgs, { temperature: 0.7, maxTokens: apiStore.getModelMaxTokens(apiStore.activeProvider?.model) });
-    }
-
-    messages.value.push({ id: ++msgId, role: 'assistant', niangId: niang.id, name: niang.name, content: result, color: niang.color });
-
-    loading.value = false;
-    await scrollBottom();
-    appStore.toastSuccess('角色卡诊断完成');
-  } catch (e) {
-    loading.value = false;
-    appStore.toastError('诊断失败: ' + e.message);
-  }
-}
-
 async function send() {
   const text = inputText.value.trim();
   if (!text || loading.value) return;
@@ -563,11 +436,7 @@ async function send() {
   await scrollBottom();
 
   try {
-    if (mode.value === 'duo') {
-      await sendDuo(text);
-    } else {
-      await sendSingle(text, activeNiang.value);
-    }
+    await sendSingle(text, activeNiang.value);
   } catch (e) {
     messages.value.push({ id: ++msgId, role: 'assistant', name: '系统', content: `出错了：${e.message}`, color: '#f87171' });
   } finally {
@@ -577,7 +446,7 @@ async function send() {
 }
 
 async function sendSingle(text, niang) {
-  const sysPrompt = niangStore.buildSystemPrompt(niang);
+  const sysPrompt = niangStore.buildSystemPrompt(niang, cardStore.cardData);
   const history = messages.value.filter(m => m.role === 'user' || m.niangId === niang.id).slice(-10);
   const chatMsgs = [
     { role: 'system', content: sysPrompt },
@@ -601,34 +470,6 @@ async function sendSingle(text, niang) {
   messages.value.push({ id: ++msgId, role: 'assistant', niangId: niang.id, name: niang.name, content: result, color: niang.color });
 }
 
-async function sendDuo(text) {
-  const sysPrompt = niangStore.buildChatPrompt(niangStore.white, niangStore.black);
-  const history = messages.value.slice(-10);
-  const chatMsgs = [
-    { role: 'system', content: sysPrompt },
-    ...history.map(m => ({ role: m.role === 'user' ? 'user' : 'assistant', content: m.content }))
-  ];
-  const result = await apiStore.chat(chatMsgs, { temperature: 0.9, maxTokens: apiStore.getModelMaxTokens(apiStore.activeProvider?.model) });
-
-  const lines = result.split('\n').filter(l => l.trim());
-  const wName = niangStore.white.name;
-  const bName = niangStore.black.name;
-  let hasNamed = false;
-
-  for (const line of lines) {
-    const trimmed = line.trim();
-    if (trimmed.startsWith(wName + '：') || trimmed.startsWith(wName + ':')) {
-      messages.value.push({ id: ++msgId, role: 'assistant', niangId: 'white', name: wName, content: trimmed.replace(new RegExp(`^${wName}[：:]\\s*`), ''), color: niangStore.white.color });
-      hasNamed = true;
-    } else if (trimmed.startsWith(bName + '：') || trimmed.startsWith(bName + ':')) {
-      messages.value.push({ id: ++msgId, role: 'assistant', niangId: 'black', name: bName, content: trimmed.replace(new RegExp(`^${bName}[：:]\\s*`), ''), color: niangStore.black.color });
-      hasNamed = true;
-    }
-  }
-  if (!hasNamed) {
-    messages.value.push({ id: ++msgId, role: 'assistant', niangId: 'white', name: wName + ' & ' + bName, content: result, color: niangStore.white.color });
-  }
-}
 </script>
 
 <style scoped>
@@ -725,4 +566,45 @@ async function sendDuo(text) {
   text-shadow: 0 1px 6px rgba(0, 0, 0, 0.8);
   pointer-events: none;
 }
+
+/* ── 齿轮 popover ── */
+.settings-pop { position: relative; }
+.settings-pop__menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  min-width: 160px;
+  background: var(--cf-bg-secondary);
+  border: 1px solid var(--cf-border);
+  border-radius: var(--cf-radius-sm);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+  padding: 6px;
+  z-index: 8000;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.settings-pop__item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px;
+  font-size: 12px;
+  color: var(--cf-text-primary);
+  cursor: pointer;
+  border-radius: 4px;
+}
+.settings-pop__item:hover { background: var(--cf-bg-hover); }
+.settings-pop__item input { margin: 0; cursor: pointer; }
+.settings-pop__btn {
+  background: transparent;
+  border: none;
+  text-align: left;
+  padding: 6px 8px;
+  font-size: 12px;
+  color: var(--cf-text-primary);
+  cursor: pointer;
+  border-radius: 4px;
+}
+.settings-pop__btn:hover { background: var(--cf-bg-hover); }
 </style>

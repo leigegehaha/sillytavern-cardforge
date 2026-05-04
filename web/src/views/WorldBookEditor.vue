@@ -6,13 +6,10 @@
         <p>管理角色卡的世界书条目 — 当前 {{ entries.length }} 条</p>
       </div>
       <div class="flex-row">
-        <button class="btn btn--secondary btn--sm" @click="showAiPanel = !showAiPanel; showNovelPanel = false; showRefNovelPanel = false">
+        <button class="btn btn--secondary btn--sm" @click="showAiPanel = !showAiPanel; showRefNovelPanel = false">
           {{ showAiPanel ? '关闭AI生成' : 'AI 生成条目' }}
         </button>
-        <button class="btn btn--accent btn--sm" @click="showNovelPanel = !showNovelPanel; showAiPanel = false; showRefNovelPanel = false">
-          {{ showNovelPanel ? '关闭' : '小说转世界书' }}
-        </button>
-        <button class="btn btn--secondary btn--sm" @click="showRefNovelPanel = !showRefNovelPanel; showAiPanel = false; showNovelPanel = false"
+        <button class="btn btn--secondary btn--sm" @click="showRefNovelPanel = !showRefNovelPanel; showAiPanel = false"
           :class="{ 'btn--accent': refNovel.length > 0 }">
           参考小说{{ refNovel.length > 0 ? ' ✓' : '' }}
         </button>
@@ -36,7 +33,7 @@
         <div class="form-group">
           <label>世界观描述 <span class="badge badge--danger">必填</span></label>
           <textarea class="textarea" v-model="aiWorldDesc" rows="6"
-            placeholder="详细描述你的世界观设定，越具体越好。例如：&#10;&#10;这是一个修仙世界，以灵气为修炼基础。修为境界分为：凡人→炼气→筑基→金丹→元婴→化神。世界中有多个宗门势力，以青云宗为主。货币系统使用灵石（下品/中品/上品）。主角是青云宗的外门弟子，刚入门不久..."></textarea>
+            placeholder="详细描述你的世界观设定，越具体越好。例如：&#10;&#10;这是一个修仙世界，以灵气为修炼基础。修为境界分为：凡人→练气→筑基→金丹→元婴→化神。世界中有多个宗门势力，主角所在的宗门是其中之一。货币系统使用灵石（下品/中品/上品）。主角是宗门外门弟子，刚入门不久..."></textarea>
         </div>
 
         <div class="grid-3">
@@ -182,69 +179,6 @@
       </div>
     </div>
 
-    <!-- 小说转世界书面板 -->
-    <div v-if="showNovelPanel" class="card mb-md">
-      <div class="card__header"><h3>小说转世界书</h3></div>
-      <div class="card__body">
-        <p class="hint mb-md">粘贴小说文本或导入 txt 文件，AI 会自动提取世界观、角色、地点、规则等信息，生成世界书条目。</p>
-        <div class="form-group">
-          <div class="flex-between" style="margin-bottom:4px">
-            <label>小说文本</label>
-            <button class="btn btn--secondary btn--sm" @click="importNovelFile">导入 txt 文件</button>
-          </div>
-          <textarea class="textarea" v-model="novelText" rows="12"
-            placeholder="粘贴你的小说内容，或点击上方「导入 txt 文件」"></textarea>
-          <div class="hint">{{ (novelText || '').length }} 字</div>
-        </div>
-        <div class="form-group">
-          <label>额外要求（可选）</label>
-          <input class="input" v-model="novelExtra"
-            placeholder="如：重点提取NPC信息 / 只要世界观不要角色 / 用json格式...">
-        </div>
-        <button class="btn btn--accent" style="width:100%;padding:10px"
-          @click="generateFromNovel" :disabled="novelGenerating || !novelText.trim()">
-          {{ novelGenerating ? `AI 正在分析... (${novelResults.length} 条)` : '开始提取世界书' }}
-        </button>
-
-        <!-- 小说分块进度条 -->
-        <div v-if="novelGenerating" class="ai-progress mt-md">
-          <div class="ai-progress__bar">
-            <div class="ai-progress__fill" :style="{ width: novelChunkProgress + '%' }"></div>
-          </div>
-          <div class="ai-progress__text">第 {{ novelChunkCurrent }} / {{ novelChunkTotal }} 块 · 已提取 {{ novelResults.length }} 条</div>
-        </div>
-
-        <!-- 提取结果预览 -->
-        <div v-if="novelResults.length > 0" class="mt-md">
-          <div class="flex-between mb-md">
-            <span class="badge badge--accent">提取到 {{ novelResults.length }} 条</span>
-            <div class="flex-row">
-              <button class="btn btn--accent btn--sm" @click="continueNovelGenerate" :disabled="novelGenerating">
-                {{ novelGenerating ? '生成中...' : '继续生成' }}
-              </button>
-              <button class="btn btn--primary btn--sm" @click="injectNovelResults">注入选中条目</button>
-              <button class="btn btn--ghost btn--sm" @click="novelResults.forEach(r => r.selected = true)">全选</button>
-              <button class="btn btn--ghost btn--sm" @click="novelResults.forEach(r => r.selected = false)">全不选</button>
-            </div>
-          </div>
-          <div v-for="(r, i) in novelResults" :key="i" class="ai-result-item" :class="{ 'ai-result-item--selected': r.selected }">
-            <div class="flex-between">
-              <div class="flex-row" @click="r.selected = !r.selected" style="cursor:pointer">
-                <input type="checkbox" v-model="r.selected" @click.stop style="accent-color:var(--cf-accent)">
-                <span class="ai-result-item__name">{{ r.comment }}</span>
-                <span v-if="r.constant" class="badge badge--warning">常驻</span>
-              </div>
-              <div class="flex-row">
-                <button class="btn btn--secondary btn--sm" @click.stop="regenNovelResult(i)" :disabled="novelGenerating">重新生成</button>
-                <button class="btn btn--danger btn--sm" @click.stop="novelResults.splice(i, 1)">删除</button>
-              </div>
-            </div>
-            <pre class="ai-result-item__content selectable">{{ r.content }}</pre>
-          </div>
-        </div>
-      </div>
-    </div>
-
     <!-- 参考小说面板 -->
     <div v-if="showRefNovelPanel" class="card mb-md">
       <div class="card__header">
@@ -368,214 +302,24 @@
     </div>
 
     <div v-else>
-      <div v-for="(entry, idx) in filteredEntries" :key="entry.id + '_' + listVersion" class="wb-entry"
-        :class="{ 'wb-entry--disabled': !entry.enabled, 'wb-entry--constant': entry.constant && entry.enabled, 'wb-entry--dragging': dragSourceId === entry.id, 'wb-entry--dragover': dragOverId === entry.id }"
-        :draggable="dragEnabledId === entry.id"
-        @dragstart="onDragStart($event, entry.id)"
-        @dragover.prevent="onDragOver($event, entry.id)"
-        @dragleave="onDragLeave(entry.id)"
-        @drop.prevent="onDrop($event, entry.id)"
-        @dragend="onDragEnd">
-
-        <!-- 条目头部 -->
-        <div class="wb-entry__header" @click="toggleExpand(entry.id)">
-          <div class="flex-row">
-            <span class="wb-drag-handle"
-              @click.stop
-              @mousedown="dragEnabledId = entry.id"
-              @mouseup="dragEnabledId = null"
-              @mouseleave="dragEnabledId = null"
-              title="按住拖动排序">⋮⋮</span>
-            <label v-if="batchMode" class="toggle-label" style="margin-right:4px" @click.stop>
-              <input type="checkbox" :checked="wbSelectedIds.has(entry.id)"
-                @change="wbToggleSelect(entry.id)">
-            </label>
-            <input type="number" class="wb-order-input"
-              :value="entry.extensions.cfSortKey"
-              @click.stop
-              @mousedown.stop
-              @change="updateOrder(entry, $event.target.value)"
-              title="显示序号 — 仅 CardForge 内部排序，不影响 insertion_order">
-            <span class="wb-entry__expand">{{ expandedIds.has(entry.id) ? '▼' : '▶' }}</span>
-            <span class="wb-entry__name">{{ entry.comment || '(未命名)' }}</span>
-            <span v-if="entry.constant && entry.enabled" class="badge badge--warning">常驻</span>
-            <span v-if="!entry.enabled" class="badge badge--danger">禁用</span>
-            <span v-if="entry.keys?.length" class="wb-entry__keys">
-              {{ (entry.keys || []).slice(0, 3).join(', ') }}{{ (entry.keys || []).length > 3 ? '...' : '' }}
-            </span>
-          </div>
-          <div class="flex-row" @click.stop>
-            <span class="wb-entry__meta">{{ entry.position }}</span>
-            <button class="btn btn--ghost btn--sm" @click="store.duplicateWorldEntry(entry.id)">复制</button>
-            <button class="btn btn--danger btn--sm" @click="appStore.confirmAction('删除这条世界书条目？', () => deleteEntry(entry.id))">删除</button>
-          </div>
-        </div>
-
-        <!-- 条目详情 -->
-        <div v-if="expandedIds.has(entry.id)" class="wb-entry__body">
-          <div class="grid-2">
-            <div class="form-group">
-              <label>条目名称 (comment)</label>
-              <input class="input" v-model="entry.comment" @input="store.markDirty()">
-            </div>
-            <div class="form-group">
-              <label>关键词 (keys)</label>
-              <input class="input" :value="(entry.keys || []).join(', ')"
-                @input="entry.keys = $event.target.value.split(',').map(k => k.trim()).filter(Boolean); store.markDirty()">
-              <div class="hint">用逗号分隔多个关键词</div>
-            </div>
-          </div>
-
-          <div class="form-group">
-            <label>内容 (content)</label>
-            <textarea class="textarea selectable" v-model="entry.content" rows="8"
-              style="font-family: var(--cf-font-mono); font-size: 12px;"
-              @input="store.markDirty()"></textarea>
-            <div class="hint">{{ (entry.content || '').length }} 字符 | ~{{ Math.round((entry.content || '').length * 1.3) }} Token</div>
-          </div>
-
-          <div class="grid-3">
-            <div class="form-group">
-              <label>插入位置 (position)</label>
-              <select class="select" v-model="entry.position" @change="syncPosition(entry); store.markDirty()">
-                <option value="before_char">角色定义之前</option>
-                <option value="after_char">角色定义之后</option>
-                <option value="before_example">示例消息前</option>
-                <option value="after_example">示例消息后</option>
-                <option value="before_author">作者注释之前</option>
-                <option value="after_author">作者注释之后</option>
-                <option value="atDepth_system">@D [系统] 在深度</option>
-                <option value="atDepth_user">@D [用户] 在深度</option>
-                <option value="atDepth_ai">@D [AI] 在深度</option>
-              </select>
-              <div v-if="String(entry.position || '').startsWith('atDepth')" class="form-group" style="margin-top:6px">
-                <label>深度值</label>
-                <input class="input" type="number" v-model.number="entry.extensions.depth" min="0" placeholder="0=最底部" @input="store.markDirty()">
-                <div class="hint">D0=最新内容旁（效力最强），D1=最后一条消息，D4=较远位置</div>
-              </div>
-              <div class="hint" v-else>角色定义前/后是最常用的。深度插入（@D）越靠近底部效力越强。</div>
-            </div>
-            <div class="form-group">
-              <label>插入顺序 (insertion_order)</label>
-              <input class="input" type="number" v-model.number="entry.insertion_order" @input="store.markDirty()">
-              <div class="hint">数值越大越靠下。推荐：系统规则1-10，NPC 50-80，输出格式9990+</div>
-            </div>
-            <div class="form-group">
-              <label>扫描深度 (depth)</label>
-              <input class="input" type="number" v-model.number="entry.extensions.depth" min="0" @input="store.markDirty()">
-              <div class="hint">扫描最近几条消息匹配关键词。0=始终匹配，4=默认</div>
-            </div>
-          </div>
-
-          <div class="flex-row gap-md" style="flex-wrap:wrap">
-            <label class="toggle-label">
-              <input type="checkbox" v-model="entry.enabled" @change="store.markDirty()"> 启用
-            </label>
-            <label class="toggle-label">
-              <input type="checkbox" v-model="entry.constant" @change="store.markDirty()"> 常驻（蓝灯）
-            </label>
-            <label class="toggle-label">
-              <input type="checkbox" v-model="entry.selective" @change="store.markDirty()"> 启用二级关键词
-            </label>
-            <label class="toggle-label">
-              <input type="checkbox" v-model="entry.extensions.exclude_recursion" @change="store.markDirty()"> 不可递归
-            </label>
-            <label class="toggle-label">
-              <input type="checkbox" v-model="entry.extensions.prevent_recursion" @change="store.markDirty()"> 防止进一步递归
-            </label>
-          </div>
-
-          <div v-if="entry.selective" class="form-group mt-md">
-            <label>二级关键词逻辑 (selectiveLogic)</label>
-            <select class="select" v-model.number="entry.extensions.selectiveLogic" @change="store.markDirty()">
-              <option :value="0">与任意 (AND ANY) — 右侧任一匹配即触发</option>
-              <option :value="1">与所有 (AND ALL) — 右侧全部匹配才触发</option>
-              <option :value="2">非所有 (NOT ALL) — 右侧至少一个不匹配时触发</option>
-              <option :value="3">非任何 (NOT ANY) — 右侧全部不匹配时触发</option>
-            </select>
-          </div>
-
-          <div v-if="entry.selective" class="form-group mt-md">
-            <label>二级关键词 (secondary_keys)</label>
-            <input class="input" :value="(entry.secondary_keys || []).join(', ')"
-              @input="entry.secondary_keys = $event.target.value.split(',').map(k => k.trim()).filter(Boolean); store.markDirty()">
-            <div class="hint">需要同时满足主关键词和二级关键词才触发</div>
-          </div>
-
-          <!-- 高级设置（折叠） -->
-          <details class="mt-md">
-            <summary style="font-size:12px;color:var(--cf-text-muted);cursor:pointer">高级设置</summary>
-            <div style="margin-top:12px">
-              <div class="grid-3">
-                <div class="form-group">
-                  <label>角色 (role)</label>
-                  <select class="select" v-model.number="entry.extensions.role" @change="store.markDirty()">
-                    <option :value="0">System</option>
-                    <option :value="1">User</option>
-                    <option :value="2">Assistant</option>
-                  </select>
-                  <div class="hint">条目以什么身份插入提示词</div>
-                </div>
-                <div class="form-group">
-                  <label>触发概率 (%)</label>
-                  <input class="input" type="number" v-model.number="entry.extensions.probability" min="0" max="100" @input="store.markDirty()">
-                  <div class="hint">关键词匹配后实际触发的概率</div>
-                </div>
-                <div class="form-group">
-                  <label>独立扫描深度</label>
-                  <input class="input" type="number" v-model.number="entry.extensions.scan_depth" placeholder="跟随全局" @input="store.markDirty()">
-                  <div class="hint">留空则用全局深度</div>
-                </div>
-              </div>
-              <div class="grid-3">
-                <div class="form-group">
-                  <label>分组 (group)</label>
-                  <input class="input" v-model="entry.extensions.group" @input="store.markDirty()">
-                  <div class="hint">同组条目互斥，只触发权重最高的</div>
-                </div>
-                <div class="form-group">
-                  <label>分组权重</label>
-                  <input class="input" type="number" v-model.number="entry.extensions.group_weight" @input="store.markDirty()">
-                </div>
-                <div class="form-group">
-                  <label>粘性 (sticky)</label>
-                  <input class="input" type="number" v-model.number="entry.extensions.sticky" placeholder="0" @input="store.markDirty()">
-                  <div class="hint">触发后持续激活的轮数</div>
-                </div>
-              </div>
-              <div class="grid-3">
-                <div class="form-group">
-                  <label>冷却 (cooldown)</label>
-                  <input class="input" type="number" v-model.number="entry.extensions.cooldown" placeholder="0" @input="store.markDirty()">
-                  <div class="hint">触发后冷却的轮数</div>
-                </div>
-                <div class="form-group">
-                  <label>延迟 (delay)</label>
-                  <input class="input" type="number" v-model.number="entry.extensions.delay" placeholder="0" @input="store.markDirty()">
-                  <div class="hint">关键词匹配后延迟几轮才触发</div>
-                </div>
-                <div class="form-group">
-                  <label>选项</label>
-                  <div style="display:flex;flex-direction:column;gap:6px">
-                    <label class="toggle-label">
-                      <input type="checkbox" v-model="entry.use_regex" @change="store.markDirty()"> 关键词使用正则匹配
-                    </label>
-                    <label class="toggle-label">
-                      <input type="checkbox" v-model="entry.extensions.match_whole_words" @change="store.markDirty()"> 整词匹配
-                    </label>
-                    <label class="toggle-label">
-                      <input type="checkbox" v-model="entry.extensions.case_sensitive" @change="store.markDirty()"> 大小写敏感
-                    </label>
-                    <label class="toggle-label">
-                      <input type="checkbox" v-model="entry.extensions.ignore_budget" @change="store.markDirty()"> 忽略 Token 预算
-                    </label>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </details>
-        </div>
-      </div>
+      <WorldEntryCard v-for="entry in filteredEntries" :key="entry.id + '_' + listVersion"
+        :entry="entry"
+        mode="persisted"
+        :expanded="expandedIds.has(entry.id)"
+        :batch-mode="batchMode"
+        :selected="wbSelectedIds.has(entry.id)"
+        :is-dragging-me="dragSourceId === entry.id"
+        :is-drag-over-me="dragOverId === entry.id"
+        @toggle-expand="toggleExpand(entry.id)"
+        @toggle-select="wbToggleSelect(entry.id)"
+        @delete="deleteEntry(entry.id)"
+        @duplicate="store.duplicateWorldEntry(entry.id)"
+        @update-order="val => updateOrder(entry, val)"
+        @drag-start="onDragStart($event, entry.id)"
+        @drag-over="onDragOver($event, entry.id)"
+        @drag-leave="onDragLeave(entry.id)"
+        @drop="onDrop($event, entry.id)"
+        @drag-end="onDragEnd" />
     </div>
   </div>
 </template>
@@ -587,6 +331,7 @@ import { useApiStore } from '../stores/api.js';
 import { useAppStore } from '../stores/app.js';
 import { buildCardContext } from '../utils/card-context.js';
 import { chatForJsonArray, parseAiJsonArray } from '../utils/json-repair.js';
+import WorldEntryCard from '../components/WorldEntryCard.vue';
 
 const store = useCardStore();
 const apiStore = useApiStore();
@@ -609,7 +354,7 @@ function normalizeAiEntries(parsed) {
       keys: item.keys || [],
       constant: item.constant ?? false,
       position: item.position || 'before_char',
-      insertion_order: item.insertion_order || 100
+      insertion_order: 100  // 朔规则：全部 100，忽略 AI 输出的值
     }));
 }
 
@@ -619,16 +364,6 @@ const filterType = ref('');
 const filterPosition = ref('');
 const expandedIds = ref(new Set());
 const listVersion = ref(0);
-
-// 小说转世界书
-const showNovelPanel = ref(false);
-const novelText = ref('');
-const novelExtra = ref('');
-const novelGenerating = ref(false);
-const novelResults = ref([]);
-const novelChunkCurrent = ref(0);
-const novelChunkTotal = ref(1);
-const novelChunkProgress = computed(() => novelChunkTotal.value > 0 ? Math.round((novelChunkCurrent.value / novelChunkTotal.value) * 100) : 0);
 
 // 参考小说（持久化到 cardData.extensions.cfReferenceNovel，跟着卡走）
 const showRefNovelPanel = ref(false);
@@ -664,233 +399,6 @@ function buildRefNovelSegment() {
   const novel = (store.cardData.extensions?.cfReferenceNovel || '').trim();
   if (!novel) return '';
   return `\n\n## 参考小说素材（按它的世界观、人物风格、笔法来生成 / 改写）\n\n${novel}`;
-}
-
-function importNovelFile() {
-  const input = document.createElement('input');
-  input.type = 'file';
-  input.accept = '.txt,.text,.md';
-  input.onchange = async (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-    try {
-      const text = await file.text();
-      novelText.value = text;
-      appStore.toastSuccess(`已导入「${file.name}」(${text.length} 字)`);
-    } catch (err) {
-      appStore.toastError('导入失败: ' + err.message);
-    }
-  };
-  input.click();
-}
-
-function splitTextToChunks(text, chunkSize = 8000) {
-  const MAX_CHUNKS = 12;
-  const chunks = [];
-  const totalLen = text.length;
-
-  // Short text: process all
-  if (totalLen <= chunkSize * MAX_CHUNKS) {
-    const chapterPattern = /(?=第[一二三四五六七八九十百千\d]+[章回节卷]|Chapter\s+\d+)/gi;
-    const chapters = text.split(chapterPattern).filter(s => s.trim().length > 50);
-
-    if (chapters.length >= 3) {
-      let current = '';
-      for (const ch of chapters) {
-        if ((current + ch).length > chunkSize && current.length > 500) {
-          chunks.push(current);
-          current = ch;
-        } else {
-          current += ch;
-        }
-      }
-      if (current.trim()) chunks.push(current);
-    } else {
-      for (let i = 0; i < totalLen; i += chunkSize) {
-        let end = Math.min(i + chunkSize, totalLen);
-        if (end < totalLen) {
-          const breakMatch = text.slice(end - 200, end).match(/.*[。！？\n]/);
-          if (breakMatch) end = (end - 200) + breakMatch.index + breakMatch[0].length;
-        }
-        chunks.push(text.slice(i, end));
-        if (end >= totalLen) break;
-      }
-    }
-    return chunks.length > 0 ? chunks : [text];
-  }
-
-  // Long text (100k+): strategic sampling
-  // 1. Beginning (30k) - world setup, character introductions
-  const headSize = Math.min(30000, Math.floor(totalLen * 0.1));
-  chunks.push(text.slice(0, headSize));
-
-  // 2. Sample evenly from middle
-  const middleChunks = MAX_CHUNKS - 2; // reserve 1 for head, 1 for tail
-  const middleStart = headSize;
-  const middleEnd = totalLen - 15000;
-  const step = Math.floor((middleEnd - middleStart) / middleChunks);
-  for (let i = 0; i < middleChunks && middleStart + i * step < middleEnd; i++) {
-    const start = middleStart + i * step;
-    let end = Math.min(start + chunkSize, totalLen);
-    if (end < totalLen) {
-      const breakMatch = text.slice(end - 200, end).match(/.*[。！？\n]/);
-      if (breakMatch) end = (end - 200) + breakMatch.index + breakMatch[0].length;
-    }
-    chunks.push(text.slice(start, end));
-  }
-
-  // 3. Ending (15k) - final state
-  chunks.push(text.slice(totalLen - 15000));
-
-  return chunks.length > 0 ? chunks : [text];
-}
-
-async function generateFromNovel() {
-  if (!apiStore.isConfigured) { appStore.toastError('请先配置 API Key'); return; }
-  if (!novelText.value.trim()) return;
-  novelGenerating.value = true;
-  novelResults.value = [];
-
-  try {
-    const chunks = splitTextToChunks(novelText.value);
-    novelChunkTotal.value = chunks.length;
-    novelChunkCurrent.value = 0;
-
-    const baseInstruction = `请从小说文本中提取以下信息并生成世界书条目：
-- 世界观/背景设定（constant=true）
-- 重要角色（每个角色一条，含外貌、性格、背景）
-- 重要地点/场景
-- 特殊规则/力量体系
-- 重要物品/组织
-
-输出 JSON 数组格式：
-[{"comment":"条目名称","keys":["关键词"],"content":"条目内容","constant":bool,"position":"before_char","insertion_order":100}]
-
-角色条目用关键词触发（constant=false），世界观规则用常驻（constant=true）。
-只输出 JSON 数组，不要其他文字。`;
-
-    for (let i = 0; i < chunks.length; i++) {
-      novelChunkCurrent.value = i + 1;
-
-      const existingNames = novelResults.value.map(r => r.comment).join('、');
-      const chunkPrompt = `你是 SillyTavern 世界书架构专家。请从以下小说文本片段中提取世界观设定。
-
-${existingNames ? `【已提取的条目（不要重复）】\n${existingNames}\n` : ''}
-${novelExtra.value ? '【额外要求】\n' + novelExtra.value + '\n' : ''}
-【小说文本 第${i + 1}/${chunks.length}块】
-${chunks[i]}
-
-${baseInstruction}`;
-
-      try {
-        const parsed = await chatForJsonArray(apiStore, [
-          { role: 'system', content: '你是世界书架构专家，擅长从小说文本中提取世界观设定。只输出合法JSON数组。所有内容必须用中文，禁止英文。' },
-          { role: 'user', content: chunkPrompt }
-        ], { temperature: 0.7, maxTokens: apiStore.getModelMaxTokens(apiStore.activeProvider?.model) });
-
-        const newItems = normalizeAiEntries(parsed);
-        novelResults.value.push(...newItems);
-      } catch (e) {
-        appStore.toastWarning(`第 ${i + 1} 块提取出错: ${e.message}，继续下一块...`);
-      }
-    }
-
-    appStore.toastSuccess(`小说分析完成，共提取 ${novelResults.value.length} 条世界书条目`);
-  } catch (e) {
-    appStore.toastError('提取失败: ' + e.message);
-  } finally { novelGenerating.value = false; }
-}
-
-async function regenNovelResult(index) {
-  if (!apiStore.isConfigured) { appStore.toastError('请先配置 API Key'); return; }
-  const old = novelResults.value[index];
-  if (!old) return;
-  novelGenerating.value = true;
-  try {
-    const prompt = `请重新生成以下世界书条目，保持相同的类型，但内容全新编写，更丰富详细。
-
-条目名称：${old.comment}
-关键词：${(old.keys || []).join(', ')}
-类型：${old.constant ? '常驻' : '触发'}
-
-只输出一个JSON对象：
-{ "comment": "条目名称", "keys": ["关键词"], "content": "条目内容", "constant": ${old.constant}, "position": "${old.position || 'before_char'}", "insertion_order": ${old.insertion_order || 100} }
-
-只输出JSON。`;
-
-    const result = await apiStore.chat([
-      { role: 'system', content: '你是世界书架构专家。只输出合法JSON对象。所有内容必须用中文，禁止英文。' },
-      { role: 'user', content: prompt }
-    ], { temperature: 0.8, maxTokens: apiStore.getModelMaxTokens(apiStore.activeProvider?.model) });
-
-    let cleaned = result.replace(/```(?:json)?\s*/gi, '').replace(/```/g, '').trim();
-    const match = cleaned.match(/\{[\s\S]*\}/);
-    if (!match) throw new Error('AI 返回格式异常');
-    const parsed = JSON.parse(match[0]);
-    novelResults.value[index] = { ...parsed, selected: true, keys: parsed.keys || old.keys, constant: parsed.constant ?? old.constant, position: parsed.position || 'before_char', insertion_order: parsed.insertion_order || 100 };
-    appStore.toastSuccess(`「${parsed.comment || old.comment}」已重新生成`);
-  } catch (e) {
-    appStore.toastError('重新生成失败: ' + e.message);
-  } finally { novelGenerating.value = false; }
-}
-
-async function continueNovelGenerate() {
-  if (!apiStore.isConfigured) { appStore.toastError('请先配置 API Key'); return; }
-  if (!novelText.value.trim()) return;
-  novelGenerating.value = true;
-
-  try {
-    const existing = novelResults.value.map(r => r.comment).join('、');
-    const textPreview = novelText.value.slice(0, 8000);
-    const prompt = `继续从以下小说文本中提取世界观设定，生成世界书条目。
-
-已经提取的条目：${existing}
-
-请生成更多未覆盖的条目（角色、地点、规则、组织等），不要重复已有的。
-
-【小说文本】
-${textPreview}
-
-${novelExtra.value ? '【额外要求】\n' + novelExtra.value + '\n' : ''}
-
-重要：如果已经把小说里能提取的设定都提取完了，没有新条目可补，**直接输出空数组 []** 即可，禁止用空对象 {} 凑数。
-输出 JSON 数组格式，同之前。只输出JSON。`;
-
-    const parsed = await chatForJsonArray(apiStore, [
-      { role: 'system', content: '你是世界书架构专家。继续提取条目，不要重复。只输出合法JSON数组。所有内容必须用中文，禁止英文。' },
-      { role: 'user', content: prompt }
-    ], { temperature: 0.7, maxTokens: apiStore.getModelMaxTokens(apiStore.activeProvider?.model) });
-
-    const newItems = normalizeAiEntries(parsed);
-    if (newItems.length === 0) {
-      appStore.toastWarning('AI 返回全是空对象，继续提取失败');
-      return;
-    }
-    novelResults.value.push(...newItems);
-    appStore.toastSuccess(`又提取了 ${newItems.length} 条，共 ${novelResults.value.length} 条`);
-  } catch (e) {
-    appStore.toastError('继续生成失败: ' + e.message);
-  } finally { novelGenerating.value = false; }
-}
-
-function injectNovelResults() {
-  const selected = novelResults.value.filter(r => r.selected);
-  if (selected.length === 0) { appStore.toastWarning('请至少选中一条'); return; }
-
-  for (const item of selected) {
-    const entry = store.addWorldEntry();
-    entry.comment = item.comment || '';
-    entry.keys = item.keys || [];
-    entry.content = item.content || '';
-    entry.constant = item.constant ?? false;
-    entry.position = item.position || 'before_char';
-    entry.insertion_order = item.insertion_order || 100;
-    entry.extensions.position = entry.position === 'before_char' ? 0 : 1;
-  }
-
-  appStore.toastSuccess(`已注入 ${selected.length} 条世界书条目`);
-  novelResults.value = [];
-  showNovelPanel.value = false;
 }
 
 // AI 生成相关
@@ -1160,8 +668,11 @@ function injectSelectedResults() {
     entry.content = item.content || '';
     entry.constant = item.constant ?? false;
     entry.position = item.position || 'before_char';
-    entry.insertion_order = item.insertion_order || 100;
+    entry.insertion_order = 100;  // 朔规则：全部 100
     entry.extensions.position = entry.position === 'before_char' ? 0 : 1;
+    // 朔规则：蓝灯只开 exclude_recursion（不可递归）；绿灯两个都开
+    entry.extensions.exclude_recursion = true;
+    entry.extensions.prevent_recursion = !entry.constant;
   }
 
   appStore.toastSuccess(`已注入 ${selected.length} 条世界书条目`);
@@ -1483,24 +994,6 @@ ${r.oldContent}
   } finally { aiRewriting.value = false; }
 }
 
-function syncPosition(entry) {
-  const posMap = {
-    'before_char': 0,
-    'after_char': 1,
-    'before_example': 2,
-    'after_example': 3,
-    'before_author': 4,
-    'after_author': 5,
-    'atDepth_system': 6,
-    'atDepth_user': 7,
-    'atDepth_ai': 8
-  };
-  entry.extensions.position = posMap[entry.position] ?? 0;
-  // 深度插入时 role 自动设置
-  if (entry.position === 'atDepth_system') entry.extensions.role = 0;
-  else if (entry.position === 'atDepth_user') entry.extensions.role = 1;
-  else if (entry.position === 'atDepth_ai') entry.extensions.role = 2;
-}
 </script>
 
 <style scoped>

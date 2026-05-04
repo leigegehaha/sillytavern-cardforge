@@ -18,12 +18,14 @@ import ScriptEditor from './views/ScriptEditor.vue';
 import EjsEditor from './views/EjsEditor.vue';
 import StatusBarEditor from './views/StatusBarEditor.vue';
 import NpcGenerator from './views/NpcGenerator.vue';
+import NovelExtractor from './views/NovelExtractor.vue';
 import PlayerChar from './views/PlayerChar.vue';
 import DialogueSample from './views/DialogueSample.vue';
 import ExtraRules from './views/ExtraRules.vue';
 import MvuEditor from './views/MvuEditor.vue';
 import PackageExport from './views/PackageExport.vue';
 import AiAssistant from './views/AiAssistant.vue';
+import CardDiagnostic from './views/CardDiagnostic.vue';
 import Statistics from './views/Statistics.vue';
 import ApiSettings from './views/ApiSettings.vue';
 
@@ -36,6 +38,7 @@ const routes = [
   { path: '/charsetting', name: 'charsetting', component: CharSetting, meta: { title: '角色设定' } },
   { path: '/worldbook', name: 'worldbook', component: WorldBookEditor, meta: { title: '世界书' } },
   { path: '/npc', name: 'npc', component: NpcGenerator, meta: { title: 'NPC 生成器' } },
+  { path: '/novel-extract', name: 'novel-extract', component: NovelExtractor, meta: { title: '小说转世界书' } },
   { path: '/greeting', name: 'greeting', component: GreetingEditor, meta: { title: '开场白' } },
   { path: '/player', name: 'player', component: PlayerChar, meta: { title: '玩家角色' } },
   { path: '/dialogue', name: 'dialogue', component: DialogueSample, meta: { title: '对话样本' } },
@@ -46,6 +49,7 @@ const routes = [
   { path: '/ejs', name: 'ejs', component: EjsEditor, meta: { title: 'EJS 模板' } },
   { path: '/statusbar', name: 'statusbar', component: StatusBarEditor, meta: { title: '前端状态栏' } },
   { path: '/package', name: 'package', component: PackageExport, meta: { title: '打包角色卡' } },
+  { path: '/diagnostic', name: 'diagnostic', component: CardDiagnostic, meta: { title: '角色卡诊断' } },
   { path: '/assistant', name: 'assistant', component: AiAssistant, meta: { title: 'AI 助手' } },
   { path: '/statistics', name: 'statistics', component: Statistics, meta: { title: '卡片统计' } },
   { path: '/api', name: 'api', component: ApiSettings, meta: { title: 'API 设置' } }

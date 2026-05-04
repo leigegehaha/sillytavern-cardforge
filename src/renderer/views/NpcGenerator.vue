@@ -326,22 +326,37 @@
               <div class="flex-between mb-md">
                 <h4>{{ npc.name || `NPC ${i + 1}` }}</h4>
                 <div class="flex-row">
-                  <label class="toggle-label">
+                  <label v-if="!npc._editing" class="toggle-label">
                     <input type="checkbox" v-model="npc.selected"> 选中
                   </label>
-                  <button class="btn btn--ghost btn--sm" @click="selfCheckOne(i)"
+                  <button v-if="!npc._editing" class="btn btn--ghost btn--sm" @click="selfCheckOne(i)"
                     :disabled="checkingIdx === i">
                     {{ checkingIdx === i ? '自查中' : 'AI 自查' }}
                   </button>
-                  <button class="btn btn--danger btn--sm" @click="generatedNpcs.splice(i, 1)">删</button>
+                  <button class="btn btn--secondary btn--sm" @click="toggleEdit(i)">
+                    {{ npc._editing ? '取消' : '编辑' }}
+                  </button>
+                  <button v-if="npc._editing" class="btn btn--primary btn--sm" @click="saveEdit(i)">保存</button>
+                  <button v-if="npc._editing && npc._originalNpc" class="btn btn--ghost btn--sm"
+                    @click="restoreOriginal(i)" title="把 AI 原版填回编辑器（点保存才生效）">恢复 AI 原版</button>
+                  <button v-if="!npc._editing" class="btn btn--danger btn--sm" @click="generatedNpcs.splice(i, 1)">删</button>
                 </div>
               </div>
 
-              <!-- 八股扫描总结 -->
-              <BaguaSummary :npc="npc" />
+              <!-- 八股扫描总结（非编辑模式才显示）-->
+              <BaguaSummary v-if="!npc._editing" :npc="npc" />
 
-              <!-- 6 块 YAML 预览 -->
-              <pre class="npc-result__yaml selectable">{{ npcToYamlPreview(npc) }}</pre>
+              <!-- 编辑模式：YAML textarea -->
+              <div v-if="npc._editing">
+                <div class="hint mb-sm">
+                  YAML 编辑模式 — 改完点保存。改坏 YAML 语法会 toast 报错（不会自动恢复，请手动改）。
+                </div>
+                <textarea class="textarea selectable" v-model="npc._editText" rows="20"
+                  style="font-family: var(--cf-font-mono); font-size: 12px;"></textarea>
+              </div>
+
+              <!-- 非编辑模式：只读 YAML 预览 -->
+              <pre v-else class="npc-result__yaml selectable">{{ npcToYamlPreview(npc) }}</pre>
             </div>
           </div>
         </div>
@@ -358,7 +373,7 @@ import { useAppStore } from '../stores/app.js';
 import { buildCardContext } from '../utils/card-context.js';
 import { chatForJsonArray, parseAiJsonArray } from '../utils/json-repair.js';
 import { NPC_RULES_PROMPT, NPC_SCHEMA_PROMPT, JSON_QUOTE_RULE } from '../utils/npc-rules.js';
-import { emptyNpc, npcToYaml, isValidNpc, normalizeNpc } from '../utils/npc-format.js';
+import { emptyNpc, npcToYaml, yamlToNpc, isValidNpc, normalizeNpc } from '../utils/npc-format.js';
 import { scanBagua, aiCheckField, aiCheckFullNpc, summarizeBagua } from '../utils/npc-checker.js';
 
 // ==================== 子组件（八股警告 / AI 检查结果 / 八股总结）====================
@@ -671,6 +686,61 @@ async function selfCheckOne(idx) {
 
 function npcToYamlPreview(npc) {
   return npcToYaml(npc);
+}
+
+// ==================== 编辑模式 ====================
+function toggleEdit(idx) {
+  const npc = generatedNpcs.value[idx];
+  if (npc._editing) {
+    // 取消编辑
+    npc._editing = false;
+    npc._editText = '';
+  } else {
+    // 进入编辑：首次进入时存 AI 原版
+    if (!npc._originalNpc) {
+      npc._originalNpc = JSON.parse(JSON.stringify({
+        name: npc.name, keys: npc.keys || [],
+        basic: npc.basic || {}, appearance: npc.appearance || {},
+        personality: npc.personality || {}, relationship: npc.relationship || {},
+        language: npc.language || {}, sample_dialogues: npc.sample_dialogues || []
+      }));
+    }
+    npc._editText = npcToYaml(npc);
+    npc._editing = true;
+  }
+}
+
+function saveEdit(idx) {
+  const npc = generatedNpcs.value[idx];
+  try {
+    const parsed = yamlToNpc(npc._editText || '');
+    if (!parsed.name || !parsed.name.trim()) {
+      appStore.toastError('YAML 解析失败：name 字段不能空（首行必须是 NPC: 名字）');
+      return;
+    }
+    const fixed = normalizeNpc(parsed);
+    // 替换 6 块字段，保留 _selected / _originalNpc 等内部状态
+    npc.name = fixed.name;
+    npc.keys = fixed.keys;
+    npc.basic = fixed.basic;
+    npc.appearance = fixed.appearance;
+    npc.personality = fixed.personality;
+    npc.relationship = fixed.relationship;
+    npc.language = fixed.language;
+    npc.sample_dialogues = fixed.sample_dialogues;
+    npc._editing = false;
+    npc._editText = '';
+    appStore.toastSuccess('已保存');
+  } catch (e) {
+    appStore.toastError('YAML 解析失败：' + e.message);
+  }
+}
+
+function restoreOriginal(idx) {
+  const npc = generatedNpcs.value[idx];
+  if (!npc._originalNpc) return;
+  npc._editText = npcToYaml(npc._originalNpc);
+  appStore.toastInfo('已把 AI 原版填回编辑器，点「保存」才生效');
 }
 
 // ==================== 注入世界书 ====================

@@ -16,6 +16,7 @@ const routes = [
   { path: '/greeting', component: () => import('./views/GreetingEditor.vue') },
   // 可选
   { path: '/npc', component: () => import('./views/NpcGenerator.vue') },
+  { path: '/novel-extract', component: () => import('./views/NovelExtractor.vue') },
   { path: '/player', component: () => import('./views/PlayerChar.vue') },
   { path: '/dialogue', component: () => import('./views/DialogueSample.vue') },
   { path: '/extra', component: () => import('./views/ExtraRules.vue') },
@@ -26,6 +27,7 @@ const routes = [
   { path: '/ejs', component: () => import('./views/EjsEditor.vue') },
   { path: '/statusbar', component: () => import('./views/StatusBarEditor.vue') },
   // 工具
+  { path: '/diagnostic', component: () => import('./views/CardDiagnostic.vue') },
   { path: '/assistant', component: () => import('./views/AiAssistant.vue') },
   { path: '/stats', component: () => import('./views/Statistics.vue') },
   // 设置
