@@ -17,6 +17,7 @@ import RegexEditor from './views/RegexEditor.vue';
 import ScriptEditor from './views/ScriptEditor.vue';
 import EjsEditor from './views/EjsEditor.vue';
 import StatusBarEditor from './views/StatusBarEditor.vue';
+import StatusBarSandbox from './views/StatusBarSandbox.vue';
 import NpcGenerator from './views/NpcGenerator.vue';
 import NovelExtractor from './views/NovelExtractor.vue';
 import PlayerChar from './views/PlayerChar.vue';
@@ -48,6 +49,7 @@ const routes = [
   { path: '/scripts', name: 'scripts', component: ScriptEditor, meta: { title: '酒馆助手脚本' } },
   { path: '/ejs', name: 'ejs', component: EjsEditor, meta: { title: 'EJS 模板' } },
   { path: '/statusbar', name: 'statusbar', component: StatusBarEditor, meta: { title: '前端状态栏' } },
+  { path: '/sandbox', name: 'sandbox', component: StatusBarSandbox, meta: { title: '状态栏沙盒' } },
   { path: '/package', name: 'package', component: PackageExport, meta: { title: '打包角色卡' } },
   { path: '/diagnostic', name: 'diagnostic', component: CardDiagnostic, meta: { title: '角色卡诊断' } },
   { path: '/assistant', name: 'assistant', component: AiAssistant, meta: { title: 'AI 助手' } },

@@ -110,6 +110,9 @@
             <router-link to="/diagnostic" class="sidebar__item" active-class="active">
               <span class="sidebar__item-icon">·</span> 角色卡诊断
             </router-link>
+            <router-link to="/sandbox" class="sidebar__item" active-class="active">
+              <span class="sidebar__item-icon">·</span> 状态栏沙盒
+            </router-link>
             <router-link to="/assistant" class="sidebar__item" active-class="active">
               <span class="sidebar__item-icon">·</span> AI 助手
             </router-link>

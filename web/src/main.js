@@ -27,6 +27,7 @@ const routes = [
   { path: '/ejs', component: () => import('./views/EjsEditor.vue') },
   { path: '/statusbar', component: () => import('./views/StatusBarEditor.vue') },
   // 工具
+  { path: '/sandbox', component: () => import('./views/StatusBarSandbox.vue') },
   { path: '/diagnostic', component: () => import('./views/CardDiagnostic.vue') },
   { path: '/assistant', component: () => import('./views/AiAssistant.vue') },
   { path: '/stats', component: () => import('./views/Statistics.vue') },

@@ -150,6 +150,7 @@ const navSections = [
   ]},
   { title: '工具', links: [
     { path: '/diagnostic', label: '角色卡诊断' },
+    { path: '/sandbox', label: '状态栏沙盒' },
     { path: '/assistant', label: 'AI 助手' },
     { path: '/stats', label: '卡片统计' },
   ]},
