@@ -17,6 +17,7 @@
       <nav class="sidebar__nav">
         <div class="sidebar__section">文件</div>
         <button class="sidebar__btn" @click="importCard">导入 PNG/JSON</button>
+        <button class="sidebar__btn" @click="importFromWorldbook">以世界书生成卡</button>
         <button class="sidebar__btn" @click="exportCard">导出 PNG</button>
         <button class="sidebar__btn" @click="exportJson">导出 JSON</button>
         <button class="sidebar__btn sidebar__btn--danger" @click="newCard">新建空卡</button>
@@ -72,6 +73,20 @@
       </div>
     </div>
 
+    <!-- 多选项弹窗（三按钮及以上） -->
+    <div v-if="appStore.chooseVisible" class="cf-confirm-overlay" @click.self="appStore.chooseResolve(null)">
+      <div class="cf-confirm-dialog">
+        <div class="cf-confirm-msg">{{ appStore.chooseMessage }}</div>
+        <div class="cf-confirm-btns">
+          <button v-for="opt in appStore.chooseOptions" :key="opt.value"
+            class="btn" :class="opt.cls || 'btn--secondary'"
+            @click="appStore.chooseResolve(opt.value)">
+            {{ opt.label }}
+          </button>
+        </div>
+      </div>
+    </div>
+
     <!-- Toast 提示 -->
     <div class="toast-container">
       <div v-for="t in appStore.toasts" :key="t.id"
@@ -88,6 +103,7 @@ import { useCardStore } from './stores/card.js';
 import { useAppStore } from './stores/app.js';
 import ErrorLogModal from './components/ErrorLogModal.vue';
 import FloatingTools from './components/FloatingTools.vue';
+import { parseStWorldbookEntries } from './utils/st-worldbook-import.js';
 
 const cardStore = useCardStore();
 const appStore = useAppStore();
@@ -147,6 +163,43 @@ const navLinks = navSections.flatMap(s => s.links);
 async function importCard() {
   sidebarOpen.value = false;
   await cardStore.importFromFile();
+}
+
+async function importFromWorldbook() {
+  sidebarOpen.value = false;
+  const input = document.createElement('input');
+  input.type = 'file';
+  input.accept = '.json';
+  input.onchange = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    try {
+      const text = await file.text();
+      const rawJson = JSON.parse(text);
+      const { entries, unsupportedPosition } = parseStWorldbookEntries(rawJson);
+      if (entries.length === 0) {
+        appStore.toastWarning('未在 JSON 中找到有效世界书条目');
+        return;
+      }
+      cardStore.newCard();
+      const fileName = file.name.replace(/\.json$/i, '');
+      cardStore.cardData.character_book.name = fileName;
+      cardStore.cardData.character_book.entries = entries;
+      cardStore.markDirty();
+
+      let msg = `已用世界书生成空白卡：${entries.length} 条条目`;
+      if (unsupportedPosition > 0) {
+        msg += `（${unsupportedPosition} 条 position 类型不支持，已转为 after_char）`;
+      }
+      appStore.toastSuccess(msg);
+      setTimeout(() => {
+        appStore.toastInfo('请在编辑器里填写角色名 / 描述 / 开场白');
+      }, 1500);
+    } catch (err) {
+      appStore.toastError(`导入失败: ${err.message}`);
+    }
+  };
+  input.click();
 }
 
 function exportCard() {

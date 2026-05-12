@@ -9,7 +9,7 @@
     <div class="card mb-md">
       <div class="card__body" style="font-size:12px;color:var(--cf-text-secondary);line-height:1.8">
         <strong>{{char}} 是谁？</strong> 就是 AI 要扮演的角色。有三种常见用法：<br>
-        · <strong>单角色卡</strong> — {{char}} 是一个具体的人（如"苏晚晴"），AI 只演她<br>
+        · <strong>单角色卡</strong> — {{char}} 是一个具体的人（角色名 + 设定），AI 只演她<br>
         · <strong>多角色卡</strong> — {{char}} 是故事标题/叙述者，AI 演里面所有角色<br>
         · <strong>系统卡</strong> — {{char}} 是游戏系统，AI 演整个世界<br><br>
         <strong>提示：</strong> 如果你把所有设定都放在世界书里（空 description 流派），这些字段可以留空。
@@ -28,7 +28,7 @@
           如果你用世界书存放详细设定，这里可以留空或只写最核心的摘要。
         </p>
         <textarea class="textarea" v-model="d.description" rows="12"
-          placeholder="写给 AI 的角色说明书。&#10;&#10;单角色卡示例：&#10;苏晚晴，28岁，书店老板娘。温柔内敛，说话轻声细语...&#10;&#10;多角色卡示例：&#10;故事围绕一对吸血鬼姐妹展开。姐姐梨奈天真单纯...妹妹汐奈是雌小鬼...&#10;&#10;系统卡示例：&#10;这是一个催眠题材的互动游戏。AI 负责扮演所有 NPC 并管理游戏系统..." @input="markDirty"></textarea>
+          placeholder="写给 AI 的角色说明书。&#10;&#10;单角色卡示例：&#10;（角色名），28岁，书店老板娘。温柔内敛，说话轻声细语...&#10;&#10;多角色卡示例：&#10;故事围绕多位主要角色展开。角色 A 性格X、角色 B 性格Y...&#10;&#10;系统卡示例：&#10;这是一个互动剧情游戏。AI 负责扮演所有 NPC 并管理游戏系统..." @input="markDirty"></textarea>
         <div class="hint">预估 Token：~{{ Math.round((d.description || '').length * 1.3) }}</div>
       </div>
     </div>

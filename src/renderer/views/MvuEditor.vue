@@ -41,6 +41,11 @@
         @dragend="onGroupDragEnd">
         <div class="card__header flex-between">
           <div class="flex-row">
+            <button class="btn btn--ghost btn--sm" @click="toggleGroupCollapsed(group.name)"
+              :title="collapsedGroups.has(group.name) ? '展开' : '折叠'"
+              style="min-width:28px;padding:4px 8px">
+              {{ collapsedGroups.has(group.name) ? '▶' : '▼' }}
+            </button>
             <span class="mvu-drag-handle"
               @mousedown="groupDragEnabledIdx = gi"
               @mouseup="groupDragEnabledIdx = null"
@@ -56,7 +61,7 @@
               @click="appStore.confirmAction('删除这个变量分组？', () => varGroups.splice(gi, 1))">删除分组</button>
           </div>
         </div>
-        <div class="card__body">
+        <div class="card__body" v-show="!collapsedGroups.has(group.name)">
           <div v-for="(field, fi) in group.fields" :key="fi" class="var-field"
             :class="{ 'mvu-field--dragging': fieldDragSrc?.gi === gi && fieldDragSrc?.fi === fi, 'mvu-field--dragover': fieldDragOver?.gi === gi && fieldDragOver?.fi === fi }"
             :draggable="fieldDragEnabled?.gi === gi && fieldDragEnabled?.fi === fi"
@@ -68,7 +73,7 @@
             <div class="grid-4">
               <div class="form-group">
                 <label>变量名</label>
-                <input class="input" v-model="field.name" placeholder="如：HP、好感度">
+                <input class="input" v-model="field.name" placeholder="如：HP、好感度、装备.头部.防御值（用点分隔嵌套）">
               </div>
               <div class="form-group">
                 <label>类型</label>
@@ -124,9 +129,9 @@
                 <input class="input" v-model="field.recordFields" placeholder="如：好感度:number,关系:string,位置:string">
               </div>
               <div class="form-group">
-                <label>更新规则说明（用于 check 字段）</label>
-                <input class="input" v-model="field.description"
-                  placeholder="如：根据角色态度变化 +-3~6 / 突破成功后重置为0 / insert出场remove离场">
+                <label>更新规则说明（用于 check 字段，每行一条规则）</label>
+                <textarea class="textarea" v-model="field.description" rows="2"
+                  placeholder="如：根据角色态度变化 +-3~6（一行一条规则，多行 = 多个 check 项）"></textarea>
               </div>
             </div>
           </div>
@@ -141,6 +146,91 @@
         <span class="hint" style="margin-left:12px">快捷预设：</span>
         <button v-for="p in presetKeys" :key="p.key" class="btn btn--ghost btn--sm"
           @click="loadPreset(p.key)">{{ p.label }}</button>
+      </div>
+
+      <!-- 自定义预设：保存当前 / 加载 / 双击改名 / 删除 -->
+      <div class="flex-row mb-md" style="flex-wrap:wrap;align-items:center;gap:6px">
+        <template v-if="!savingNewPreset">
+          <button class="btn btn--secondary btn--sm" @click="startSaveNewPreset">+ 保存当前为预设</button>
+        </template>
+        <template v-else>
+          <input class="input" v-model="newPresetName" placeholder="预设名"
+            style="width:140px" @keyup.enter="confirmSaveNewPreset" @keyup.escape="cancelSaveNewPreset"/>
+          <button class="btn btn--primary btn--sm" @click="confirmSaveNewPreset">保存</button>
+          <button class="btn btn--ghost btn--sm" @click="cancelSaveNewPreset">取消</button>
+        </template>
+        <span v-if="customPresets.length > 0" class="hint" style="margin-left:8px">自定义：</span>
+        <span v-for="preset in customPresets" :key="preset.id" style="display:inline-flex;align-items:center;gap:0">
+          <template v-if="editingPresetId === preset.id">
+            <input class="input" v-model="editingPresetName"
+              style="width:120px" @keyup.enter="confirmRenamePreset" @keyup.escape="cancelRenamePreset" @blur="confirmRenamePreset"/>
+          </template>
+          <template v-else>
+            <button class="btn btn--ghost btn--sm" @click="loadCustomPreset(preset)"
+              @dblclick="startRenamePreset(preset)" title="点击加载 / 双击改名">{{ preset.name }}</button>
+            <button class="btn btn--danger btn--sm" style="padding:2px 6px;font-size:11px"
+              @click="deleteCustomPreset(preset.id)" title="删除">×</button>
+          </template>
+        </span>
+      </div>
+
+      <!-- 三方校验：varGroups 定义 vs 状态栏 HTML 实际使用 -->
+      <div class="flex-row mb-md" style="flex-wrap:wrap;align-items:center;gap:8px">
+        <button class="btn btn--ghost btn--sm" @click="startValidation">三方路径校验</button>
+        <span class="hint">对比 varGroups 定义 vs 状态栏 HTML 实际使用的路径，找出漂移项</span>
+      </div>
+
+      <!-- 校验报告面板 -->
+      <div v-if="showValidation && validationResult" class="card mb-md">
+        <div class="card__header flex-between">
+          <h3>路径校验报告</h3>
+          <button class="btn btn--ghost btn--sm" @click="showValidation = false">×</button>
+        </div>
+        <div class="card__body">
+          <template v-if="!validationResult.hasStatusBar">
+            <p class="hint">尚未生成状态栏（正则脚本里没找到「状态栏美化」），仅展示 varGroups 路径：</p>
+            <div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:8px">
+              <span v-for="p in validationResult.varPaths" :key="p" class="badge badge--info">{{ p }}</span>
+            </div>
+          </template>
+          <template v-else>
+            <div v-if="validationResult.onlyInVarGroups.length === 0 && validationResult.onlyInStatusBar.length === 0"
+              class="badge badge--success" style="display:block;padding:12px;text-align:center;font-size:14px">
+              ✓ 完全对齐（{{ validationResult.varPaths.length }} 条路径）
+            </div>
+            <template v-else>
+              <div v-if="validationResult.onlyInVarGroups.length > 0" class="mb-md">
+                <div style="color:var(--cf-warning);font-weight:600;margin-bottom:6px">
+                  注意: varGroups 定义了但状态栏没用（{{ validationResult.onlyInVarGroups.length }} 条）
+                </div>
+                <div style="display:flex;flex-wrap:wrap;gap:4px">
+                  <span v-for="p in validationResult.onlyInVarGroups" :key="p" class="badge badge--warning">{{ p }}</span>
+                </div>
+              </div>
+              <div v-if="validationResult.onlyInStatusBar.length > 0" class="mb-md">
+                <div style="color:var(--cf-danger);font-weight:600;margin-bottom:6px">
+                  ✕ 状态栏用了但 varGroups 没定义（{{ validationResult.onlyInStatusBar.length }} 条）
+                </div>
+                <div style="display:flex;flex-wrap:wrap;gap:4px">
+                  <span v-for="p in validationResult.onlyInStatusBar" :key="p" class="badge badge--danger">{{ p }}</span>
+                </div>
+              </div>
+            </template>
+            <details style="margin-top:12px">
+              <summary style="cursor:pointer;color:var(--cf-text-secondary)">完整路径列表</summary>
+              <div style="margin-top:8px">
+                <div class="hint">varGroups 定义（{{ validationResult.varPaths.length }} 条）：</div>
+                <div style="display:flex;flex-wrap:wrap;gap:4px;margin:4px 0 8px 0">
+                  <span v-for="p in validationResult.varPaths" :key="p" class="badge">{{ p }}</span>
+                </div>
+                <div class="hint">状态栏使用（{{ validationResult.statusBarPaths.length }} 条）：</div>
+                <div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:4px">
+                  <span v-for="p in validationResult.statusBarPaths" :key="p" class="badge">{{ p }}</span>
+                </div>
+              </div>
+            </details>
+          </template>
+        </div>
       </div>
 
       <div class="card mb-md">
@@ -277,7 +367,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed, watch } from 'vue';
+import { ref, reactive, computed, watch, onMounted } from 'vue';
 import { useCardStore } from '../stores/card.js';
 import { useApiStore } from '../stores/api.js';
 import { useAppStore } from '../stores/app.js';
@@ -378,6 +468,17 @@ const keepFloors = ref(3);
 const trackPresentChars = ref(false);
 const injectSummary = ref('');
 
+/* 变量分组折叠状态（按 group.name 标记，localStorage 持久化） */
+const collapsedGroups = ref(new Set(
+  JSON.parse(localStorage.getItem('cf_mvu_collapsed_groups') || '[]')
+));
+function toggleGroupCollapsed(name) {
+  if (collapsedGroups.value.has(name)) collapsedGroups.value.delete(name);
+  else collapsedGroups.value.add(name);
+  collapsedGroups.value = new Set(collapsedGroups.value);
+  localStorage.setItem('cf_mvu_collapsed_groups', JSON.stringify([...collapsedGroups.value]));
+}
+
 /* ========================================================================
    变量分组数据
    ======================================================================== */
@@ -449,6 +550,164 @@ function addGroup() { varGroups.push({ name: '', fields: [] }); }
 function addField(group) { group.fields.push(mkField('', 'number', '')); }
 function getDefaultPlaceholder(type) {
   return { number: '如：100', string: '如：未知', boolean: 'true / false', enum: '第一个枚举值', record: '{}', array: '[]' }[type] || '';
+}
+
+/* ========================================================================
+   自定义预设（持久化到 settings.json: cfMvuGroupPresets）
+   ======================================================================== */
+
+const customPresets = ref([]);
+const savingNewPreset = ref(false);
+const newPresetName = ref('');
+const editingPresetId = ref(null);
+const editingPresetName = ref('');
+
+async function loadCustomPresetsRaw() {
+  try {
+    const settings = await window.cardForgeAPI.loadSettings();
+    return Array.isArray(settings?.cfMvuGroupPresets) ? settings.cfMvuGroupPresets : [];
+  } catch { return []; }
+}
+async function saveCustomPresetsRaw(presets) {
+  try {
+    const settings = (await window.cardForgeAPI.loadSettings()) || {};
+    settings.cfMvuGroupPresets = presets;
+    await window.cardForgeAPI.saveSettings(settings);
+  } catch (e) { /* ignore */ }
+}
+
+onMounted(async () => {
+  customPresets.value = await loadCustomPresetsRaw();
+});
+
+function startSaveNewPreset() {
+  if (varGroups.length === 0) {
+    appStore.toastWarning('当前没有变量分组，无法保存为预设');
+    return;
+  }
+  savingNewPreset.value = true;
+  newPresetName.value = `预设 ${customPresets.value.length + 1}`;
+}
+
+async function confirmSaveNewPreset() {
+  const name = newPresetName.value.trim();
+  if (!name) {
+    appStore.toastWarning('预设名不能为空');
+    return;
+  }
+  const preset = {
+    id: 'preset_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8),
+    name,
+    groups: JSON.parse(JSON.stringify(varGroups)),
+    createdAt: new Date().toISOString(),
+  };
+  customPresets.value.push(preset);
+  await saveCustomPresetsRaw(customPresets.value);
+  savingNewPreset.value = false;
+  newPresetName.value = '';
+  appStore.toastSuccess(`已保存「${name}」`);
+}
+
+function cancelSaveNewPreset() {
+  savingNewPreset.value = false;
+  newPresetName.value = '';
+}
+
+function loadCustomPreset(preset) {
+  varGroups.length = 0;
+  for (const g of preset.groups) {
+    varGroups.push({ name: g.name, fields: g.fields.map(f => ({ ...f })) });
+  }
+  appStore.toastSuccess(`已加载「${preset.name}」`);
+}
+
+function startRenamePreset(preset) {
+  editingPresetId.value = preset.id;
+  editingPresetName.value = preset.name;
+}
+
+async function confirmRenamePreset() {
+  const preset = customPresets.value.find(p => p.id === editingPresetId.value);
+  if (preset) {
+    const newName = editingPresetName.value.trim();
+    if (newName) preset.name = newName;
+    await saveCustomPresetsRaw(customPresets.value);
+  }
+  editingPresetId.value = null;
+  editingPresetName.value = '';
+}
+
+function cancelRenamePreset() {
+  editingPresetId.value = null;
+  editingPresetName.value = '';
+}
+
+function deleteCustomPreset(presetId) {
+  appStore.confirmAction('删除这个自定义预设？', async () => {
+    customPresets.value = customPresets.value.filter(p => p.id !== presetId);
+    await saveCustomPresetsRaw(customPresets.value);
+    appStore.toastSuccess('已删除');
+  });
+}
+
+/* ========================================================================
+   三方校验（varGroups 路径 vs 状态栏 HTML 实际使用路径）
+   ======================================================================== */
+
+function extractVarGroupsPaths() {
+  const set = new Set();
+  for (const group of varGroups) {
+    if (!group.name) continue;
+    for (const f of group.fields) {
+      if (!f.name || f.name.startsWith('_')) continue;
+      set.add(`${group.name}.${f.name}`);
+    }
+  }
+  return set;
+}
+
+function extractStatusBarPaths(htmlText) {
+  const set = new Set();
+  if (!htmlText) return set;
+  // 匹配 stat_data.XXX，path 可含中文 / 字母 / 数字 / 下划线 / 点
+  const re = /stat_data\.([\w一-龥][\w一-龥.]*)/g;
+  let m;
+  while ((m = re.exec(htmlText)) !== null) {
+    set.add(m[1]);
+  }
+  return set;
+}
+
+const validationResult = ref(null);
+const showValidation = ref(false);
+
+function startValidation() {
+  const varPaths = extractVarGroupsPaths();
+  const regexes = cardStore.cardData.extensions?.regex_scripts || [];
+  const sbRegex = regexes.find(r => r.scriptName === '状态栏美化');
+  const htmlText = sbRegex?.replaceString || null;
+
+  if (htmlText === null) {
+    validationResult.value = {
+      hasStatusBar: false,
+      varPaths: [...varPaths],
+      statusBarPaths: [],
+      onlyInVarGroups: [],
+      onlyInStatusBar: [],
+    };
+  } else {
+    const sbPaths = extractStatusBarPaths(htmlText);
+    const onlyInVarGroups = [...varPaths].filter(p => !sbPaths.has(p));
+    const onlyInStatusBar = [...sbPaths].filter(p => !varPaths.has(p));
+    validationResult.value = {
+      hasStatusBar: true,
+      varPaths: [...varPaths],
+      statusBarPaths: [...sbPaths],
+      onlyInVarGroups,
+      onlyInStatusBar,
+    };
+  }
+  showValidation.value = true;
 }
 
 /* ========================================================================
@@ -679,74 +938,87 @@ const updateRuleText = computed(() => {
     if (updatable.length === 0) continue;
     text += `  ${group.name}:\n`;
 
-    /* 按.拆分第一层分组，合并同一子分组下的字段 */
-    const subGroups = {};
-    const topLevel = [];
+    /* 构建嵌套树（与 zod/yaml 一致用 split('.') 全拆，支持任意深度） */
+    const tree = {};
     for (const f of updatable) {
-      const dotIdx = f.name.indexOf('.');
-      if (dotIdx > 0) {
-        const sub = f.name.substring(0, dotIdx);
-        const leaf = f.name.substring(dotIdx + 1);
-        if (!subGroups[sub]) subGroups[sub] = [];
-        subGroups[sub].push({ ...f, leafName: leaf });
-      } else {
-        topLevel.push(f);
-      }
-    }
-
-    /* 输出顶层字段 */
-    const plainStrings = topLevel.filter(f => f.type === 'string' && !f.description);
-    const others = topLevel.filter(f => !(f.type === 'string' && !f.description));
-
-    if (plainStrings.length > 1) {
-      text += `    ${plainStrings.map(f => f.name).join(', ')}:\n`;
-      text += '      check:\n        - update when this information changes in the narrative\n';
-    } else if (plainStrings.length === 1) {
-      text += `    ${plainStrings[0].name}:\n`;
-      text += '      check:\n        - update when this information changes in the narrative\n';
-    }
-    for (const f of others) {
-      text += buildRuleField(f, f.name, 4);
-    }
-
-    /* 输出嵌套子分组：合并同一子分组下的同类字段 */
-    for (const [sub, fields] of Object.entries(subGroups)) {
-      text += `    ${sub}:\n`;
-      const subPlain = fields.filter(f => f.type === 'string' && !f.description);
-      const subOthers = fields.filter(f => !(f.type === 'string' && !f.description));
-
-      if (subPlain.length > 1) {
-        text += `      ${subPlain.map(f => f.leafName).join(', ')}:\n`;
-        text += '        check:\n          - update when this information changes in the narrative\n';
-      } else if (subPlain.length === 1) {
-        text += `      ${subPlain[0].leafName}:\n`;
-        text += '        check:\n          - update when this information changes in the narrative\n';
-      }
-      /* 合并同类型+同描述的非string字段 */
-      const sameCheck = {};
-      for (const f of subOthers) {
-        const key = f.type + '|' + (f.description || getDefaultCheck(f));
-        if (!sameCheck[key]) sameCheck[key] = [];
-        sameCheck[key].push(f);
-      }
-      for (const [, group] of Object.entries(sameCheck)) {
-        if (group.length > 1) {
-          text += `      ${group.map(f => f.leafName).join(', ')}:\n`;
-          const f0 = group[0];
-          if (f0.type === 'number') text += '        type: number\n';
-          text += '        check:\n';
-          text += `          - ${f0.description || getDefaultCheck(f0)}\n`;
-        } else {
-          text += buildRuleField(group[0], group[0].leafName, 6);
+      const parts = f.name.split('.');
+      let node = tree;
+      for (let i = 0; i < parts.length - 1; i++) {
+        if (!node[parts[i]] || node[parts[i]].__field) {
+          node[parts[i]] = {};
         }
+        node = node[parts[i]];
       }
+      node[parts[parts.length - 1]] = { __field: f };
     }
+
+    /* 递归输出，从层级 2 开始（group.name 在层级 1） */
+    text += ruleTreeToText(tree, 2);
   }
   if (trackPresentChars.value) {
     text += '  在场角色追踪:\n    在场角色:\n      check:\n        - update with comma-separated names of characters currently present in the scene\n';
   }
   return text;
 });
+
+/* 把 description 按换行拆成多行 `- xxx` 列表，空行过滤 */
+function formatCheckLines(desc, pad) {
+  const lines = String(desc || '').split('\n').map(l => l.trim()).filter(Boolean);
+  if (lines.length === 0) return '';
+  return lines.map(l => `${pad}    - ${l}\n`).join('');
+}
+
+function ruleTreeToText(tree, indent) {
+  let text = '';
+  const pad = '  '.repeat(indent);
+
+  /* 把当前层 entries 拆成两类：叶子字段 vs 子树 */
+  const leaves = [];
+  const branches = [];
+  for (const [k, v] of Object.entries(tree)) {
+    if (v.__field) leaves.push({ key: k, field: v.__field });
+    else branches.push({ key: k, subtree: v });
+  }
+
+  /* 当前层叶子合并 plain strings（无 description 的 string） */
+  const plainStrings = leaves.filter(({ field }) => field.type === 'string' && !field.description);
+  const others = leaves.filter(({ field }) => !(field.type === 'string' && !field.description));
+
+  if (plainStrings.length > 1) {
+    text += `${pad}${plainStrings.map(l => l.key).join(', ')}:\n`;
+    text += `${pad}  check:\n${pad}    - update when this information changes in the narrative\n`;
+  } else if (plainStrings.length === 1) {
+    text += `${pad}${plainStrings[0].key}:\n`;
+    text += `${pad}  check:\n${pad}    - update when this information changes in the narrative\n`;
+  }
+
+  /* 合并同 type+description 的非 string 字段 */
+  const sameCheck = {};
+  for (const { key, field } of others) {
+    const k = field.type + '|' + (field.description || getDefaultCheck(field));
+    if (!sameCheck[k]) sameCheck[k] = [];
+    sameCheck[k].push({ key, field });
+  }
+  for (const group of Object.values(sameCheck)) {
+    if (group.length > 1) {
+      const f0 = group[0].field;
+      text += `${pad}${group.map(g => g.key).join(', ')}:\n`;
+      if (f0.type === 'number') text += `${pad}  type: number\n`;
+      text += `${pad}  check:\n`;
+      text += formatCheckLines(f0.description || getDefaultCheck(f0), pad);
+    } else {
+      text += buildRuleField(group[0].field, group[0].key, indent * 2);
+    }
+  }
+
+  /* 递归子树 */
+  for (const { key, subtree } of branches) {
+    text += `${pad}${key}:\n`;
+    text += ruleTreeToText(subtree, indent + 1);
+  }
+
+  return text;
+}
 
 function buildRuleField(f, name, indent) {
   const pad = '  '.repeat(indent / 2);
@@ -768,7 +1040,7 @@ function buildRuleField(f, name, indent) {
     text += `${pad}  type: boolean\n`;
   }
   text += `${pad}  check:\n`;
-  text += `${pad}    - ${f.description || getDefaultCheck(f)}\n`;
+  text += formatCheckLines(f.description || getDefaultCheck(f), pad);
   return text;
 }
 

@@ -4,6 +4,7 @@
       <div>
         <h1>世界书编辑器</h1>
         <p>管理角色卡的世界书条目 — 当前 {{ entries.length }} 条</p>
+        <input class="input" v-model="bookName" placeholder="世界书名（默认为「未命名」）" style="max-width:320px;margin-top:4px"/>
       </div>
       <div class="flex-row">
         <button class="btn btn--secondary btn--sm" @click="showAiPanel = !showAiPanel; showRefNovelPanel = false">
@@ -364,6 +365,18 @@ const filterType = ref('');
 const filterPosition = ref('');
 const expandedIds = ref(new Set());
 const listVersion = ref(0);
+
+// 世界书名（直接绑定到 character_book.name，inline 编辑）
+const bookName = computed({
+  get() { return store.cardData.character_book?.name || ''; },
+  set(v) {
+    if (!store.cardData.character_book) {
+      store.cardData.character_book = { name: '', entries: [] };
+    }
+    store.cardData.character_book.name = v;
+    store.markDirty();
+  }
+});
 
 // 参考小说（持久化到 cardData.extensions.cfReferenceNovel，跟着卡走）
 const showRefNovelPanel = ref(false);

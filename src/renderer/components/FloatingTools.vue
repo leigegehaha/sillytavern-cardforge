@@ -480,11 +480,11 @@ function applyEnrichedDesc() {
 .ft-ball {
   width: 48px; height: 48px;
   border-radius: 50%;
-  background: linear-gradient(135deg, var(--cf-primary), var(--cf-accent, #f59e42));
+  background: linear-gradient(135deg, #f7b267, #d97706);
   color: #fff;
-  border: 2px solid rgba(255, 255, 255, 0.2);
+  border: 2px solid rgba(255, 255, 255, 0.25);
   cursor: grab;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.45), 0 0 0 1px rgba(0, 0, 0, 0.2);
   display: flex; align-items: center; justify-content: center;
   font-size: 20px;
   transition: transform 0.15s, box-shadow 0.15s;
@@ -501,10 +501,12 @@ function applyEnrichedDesc() {
   position: absolute;
   width: 360px;
   height: 500px;
-  background: var(--cf-bg-secondary);
-  border: 1px solid var(--cf-border);
-  border-radius: var(--cf-radius);
-  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.5);
+  background: rgba(20, 22, 35, 0.92);
+  backdrop-filter: blur(14px) saturate(140%);
+  -webkit-backdrop-filter: blur(14px) saturate(140%);
+  border: 1px solid var(--cf-border-light);
+  border-radius: var(--cf-radius-lg);
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.55);
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -545,11 +547,11 @@ function applyEnrichedDesc() {
   cursor: pointer;
   white-space: nowrap;
 }
-.ft-tab:hover { background: rgba(255, 255, 255, 0.05); }
+.ft-tab:hover { background: var(--cf-bg-hover); color: var(--cf-text-primary); }
 .ft-tab--active {
-  background: var(--cf-primary);
+  background: var(--cf-accent);
   color: #fff;
-  border-color: var(--cf-primary);
+  border-color: var(--cf-accent);
 }
 
 .ft-panel__body {

@@ -25,6 +25,14 @@
         <div class="dash-action__title">NPC 生成器</div>
         <div class="dash-action__desc">用 AI 快速生成角色</div>
       </div>
+      <div class="dash-action" @click="handleImportFromWorldbook" style="position:relative">
+          <div class="dash-action__icon"></div>
+        <div class="dash-action__title">以世界书生成卡</div>
+        <div class="dash-action__desc">从 ST 世界书 JSON 起一张空白卡（自动灌入条目）</div>
+      </div>
+    </div>
+
+    <div class="grid-2 mb-md">
       <div class="dash-action" @click="showAssetImport = true" style="position:relative">
           <div class="dash-action__icon"></div>
         <div class="dash-action__title">从其他卡导入资产</div>
@@ -129,6 +137,7 @@ import { useRouter } from 'vue-router';
 import { useCardStore } from '../stores/card.js';
 import { useAppStore } from '../stores/app.js';
 import AssetImportModal from '../components/AssetImportModal.vue';
+import { parseStWorldbookEntries } from '../utils/st-worldbook-import.js';
 
 const router = useRouter();
 const cardStore = useCardStore();
@@ -153,16 +162,105 @@ async function handleImport() {
       const json = JSON.parse(result.data);
       cardStore.loadFromJson(json);
       cardStore.filePath = filePath;
-    } else if (filePath.endsWith('.png')) {
-      const result = await api.extractCharaData(filePath);
-      if (!result.success) throw new Error(result.error);
-      cardStore.loadFromJson(result.data);
-      cardStore.filePath = filePath;
-      cardStore.coverImagePath = filePath;
-    } else {
-      throw new Error('不支持的文件格式');
+      appStore.toastSuccess(`已导入: ${cardStore.cardName}`);
+      router.push('/editor');
+      return;
     }
-    appStore.toastSuccess(`已导入: ${cardStore.cardName}`);
+
+    if (filePath.endsWith('.png')) {
+      // 同时读 PNG base64（用作封面 fallback）
+      const fileResult = await api.readFile(filePath);
+      const base64 = fileResult.success ? `data:image/png;base64,${fileResult.data}` : null;
+
+      // 尝试提取角色卡数据
+      const charaResult = await api.extractCharaData(filePath);
+
+      if (!charaResult.success) {
+        // 纯封面 PNG（不含角色卡数据）→ 不动 cardData，只设封面
+        cardStore.coverImagePath = filePath;
+        if (base64) cardStore.coverImageBase64 = base64;
+        cardStore.markDirty();
+        appStore.toastSuccess('已设置封面图（PNG 不含角色卡数据）');
+        router.push('/editor');
+        return;
+      }
+
+      // PNG 含完整角色卡数据
+      const applyOverwrite = () => {
+        cardStore.loadFromJson(charaResult.data);
+        cardStore.filePath = filePath;
+        cardStore.coverImagePath = filePath;
+        if (base64) cardStore.coverImageBase64 = base64;
+        appStore.toastSuccess(`已导入: ${cardStore.cardName}`);
+        router.push('/editor');
+      };
+      const applyCoverOnly = () => {
+        cardStore.coverImagePath = filePath;
+        if (base64) cardStore.coverImageBase64 = base64;
+        cardStore.markDirty();
+        appStore.toastSuccess('已设置封面图（角色卡数据已忽略）');
+        router.push('/editor');
+      };
+
+      if (cardStore.isDirty) {
+        // 有未保存改动 → 三选项弹窗
+        appStore.chooseAction(
+          '这张 PNG 含完整角色卡数据。当前编辑的卡有未保存改动，要怎么处理？',
+          [
+            { value: 'cover', label: '只用它当封面', cls: 'btn--primary' },
+            { value: 'overwrite', label: '用 PNG 覆盖当前卡', cls: 'btn--secondary' },
+            { value: 'cancel', label: '取消', cls: 'btn--ghost' },
+          ],
+          (choice) => {
+            if (choice === 'overwrite') applyOverwrite();
+            else if (choice === 'cover') applyCoverOnly();
+          }
+        );
+        return;
+      }
+
+      // 空白卡或未改动 → 直接覆盖
+      applyOverwrite();
+      return;
+    }
+
+    throw new Error('不支持的文件格式');
+  } catch (e) {
+    appStore.toastError(`导入失败: ${e.message}`);
+  }
+}
+
+async function handleImportFromWorldbook() {
+  const filePath = await api.openFile();
+  if (!filePath) return;
+  if (!filePath.endsWith('.json')) {
+    appStore.toastError('请选择 .json 格式的世界书文件');
+    return;
+  }
+  try {
+    const result = await api.readTextFile(filePath);
+    if (!result.success) throw new Error(result.error);
+    const rawJson = JSON.parse(result.data);
+    const { entries, unsupportedPosition } = parseStWorldbookEntries(rawJson);
+    if (entries.length === 0) {
+      appStore.toastWarning('未在 JSON 中找到有效世界书条目');
+      return;
+    }
+    // 新建空白卡 → 把世界书塞进 character_book
+    cardStore.newCard();
+    const fileName = filePath.split(/[/\\]/).pop().replace(/\.json$/i, '');
+    cardStore.cardData.character_book.name = fileName;
+    cardStore.cardData.character_book.entries = entries;
+    cardStore.markDirty();
+
+    let msg = `已用世界书生成空白卡：${entries.length} 条条目`;
+    if (unsupportedPosition > 0) {
+      msg += `（${unsupportedPosition} 条 position 类型不支持，已转为 after_char）`;
+    }
+    appStore.toastSuccess(msg);
+    setTimeout(() => {
+      appStore.toastInfo('请在编辑器里填写角色名 / 描述 / 开场白');
+    }, 1500);
     router.push('/editor');
   } catch (e) {
     appStore.toastError(`导入失败: ${e.message}`);

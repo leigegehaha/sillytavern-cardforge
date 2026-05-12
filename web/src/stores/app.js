@@ -12,6 +12,12 @@ export const useAppStore = defineStore('app', () => {
   let _confirmResolve = null;
   let _confirmReject = null;
 
+  // 多选项弹窗状态（三按钮及以上）
+  const chooseVisible = ref(false);
+  const chooseMessage = ref('');
+  const chooseOptions = ref([]);
+  let _chooseResolve = null;
+
   function toast(message, type = 'info', duration = 3000) {
     const id = ++toastId;
     toasts.value.push({ id, message, type });
@@ -50,9 +56,29 @@ export const useAppStore = defineStore('app', () => {
     _confirmResolve = null;
   }
 
+  // 三选项及以上弹窗
+  // options 形如 [{ value, label, cls?: 'btn--primary'|'btn--secondary'|'btn--danger'|'btn--ghost' }]
+  // 用户点遮罩或取消时 callback 收到 null
+  function chooseAction(msg, options, callback) {
+    chooseMessage.value = msg;
+    chooseOptions.value = options || [];
+    chooseVisible.value = true;
+    _chooseResolve = callback;
+  }
+
+  function chooseResolve(value) {
+    chooseVisible.value = false;
+    if (_chooseResolve) {
+      _chooseResolve(value);
+      _chooseResolve = null;
+    }
+  }
+
   return {
     toasts, confirmVisible, confirmMessage,
+    chooseVisible, chooseMessage, chooseOptions,
     toast, toastSuccess, toastError, toastWarning, toastInfo,
-    confirmAction, confirmYes, confirmNo
+    confirmAction, confirmYes, confirmNo,
+    chooseAction, chooseResolve
   };
 });

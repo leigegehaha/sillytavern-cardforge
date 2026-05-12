@@ -165,6 +165,20 @@
       </div>
     </div>
 
+    <!-- 多选项弹窗（三按钮及以上） -->
+    <div v-if="appStore.chooseVisible" class="cf-confirm-overlay" @click.self="appStore.chooseResolve(null)">
+      <div class="cf-confirm-dialog">
+        <div class="cf-confirm-msg">{{ appStore.chooseMessage }}</div>
+        <div class="cf-confirm-btns">
+          <button v-for="opt in appStore.chooseOptions" :key="opt.value"
+            class="btn" :class="opt.cls || 'btn--secondary'"
+            @click="appStore.chooseResolve(opt.value)">
+            {{ opt.label }}
+          </button>
+        </div>
+      </div>
+    </div>
+
     <!-- 全局浮动工具集（AI 助手 / 诊断页隐藏） -->
     <FloatingTools v-if="$route.path !== '/assistant' && $route.path !== '/diagnostic'" />
 

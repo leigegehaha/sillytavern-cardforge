@@ -958,7 +958,7 @@ ${JSON.stringify(list, null, 2)}
 ${extraReq.value ? '- 用户需求：' + extraReq.value : ''}
 
 【完整参考模板 — 严格按此结构编写，不可省略任何部分】
-` + '```html\n<!doctype html>\n<html lang="zh-CN">\n<head>\n  <style>\n  body {\n    margin: 0;\n    padding: 0;\n  }\n\n  /* 在这里根据用户要求的视觉风格自由设计样式 */\n  </style>\n  <script type="module">\n    function populateCharacterData() {\n      const all_variables = getAllVariables();\n\n      /* 用 _.get(all_variables, \'stat_data.路径\', 默认值) 读取每个变量 */\n      /* 用 $(\'#id\').text(value) 更新每个元素 */\n' + getLines + '\n    }\n\n    async function init() {\n      await waitGlobalInitialized(\'Mvu\');\n      populateCharacterData();\n\n      /* 监听变量更新事件，实现自动刷新 */\n      eventOn(Mvu.events.VARIABLE_UPDATE_ENDED, () => {\n        populateCharacterData();\n      });\n\n      $(".tab-btn").on("click", function () {\n        $(".tab-btn").removeClass("active");\n        $(this).addClass("active");\n        $(".tab-content").removeClass("active");\n        $("#" + $(this).data("target")).addClass("active");\n      });\n    }\n\n    $(errorCatched(init));\n  </' + 'script>\n</' + 'head>\n<body>\n  <!-- 在这里根据用户要求的布局设计HTML结构 -->\n  <!-- 每个需要显示的变量必须有唯一的 id，在 populateCharacterData 中用 $(\'#id\').text(value) 填充 -->\n  <!-- 预填值为 0 或 "--" -->\n</' + 'body>\n</' + 'html>\n```\n' + `
+` + '```html\n<!doctype html>\n<html lang="zh-CN">\n<head>\n  <style>\n  body {\n    margin: 0;\n    padding: 0;\n  }\n\n  /* 在这里根据用户要求的视觉风格自由设计样式 */\n  </style>\n  <script type="module">\n    function populateCharacterData() {\n      const all_variables = getAllVariables();\n\n      /* 用 _.get(all_variables, \'stat_data.路径\', 默认值) 读取每个变量 */\n      /* 用 $(\'#id\').text(value) 更新每个元素 */\n' + getLines + '\n    }\n\n    async function init() {\n      await waitGlobalInitialized(\'Mvu\');\n      populateCharacterData();\n\n      /* 监听变量更新事件，实现自动刷新 */\n      eventOn(Mvu.events.VARIABLE_UPDATE_ENDED, () => {\n        populateCharacterData();\n      });\n\n      $("[data-target]").on("click", function () {\n        const target = $(this).data("target");\n        $("[data-target]").removeClass("active");\n        $(this).addClass("active");\n        $(".tab-content, [data-tab-content]").removeClass("active");\n        $("#" + target).addClass("active");\n      });\n    }\n\n    $(errorCatched(init));\n  </' + 'script>\n</' + 'head>\n<body>\n  <!-- 在这里根据用户要求的布局设计HTML结构 -->\n  <!-- 每个需要显示的变量必须有唯一的 id，在 populateCharacterData 中用 $(\'#id\').text(value) 填充 -->\n  <!-- 预填值为 0 或 "--" -->\n</' + 'body>\n</' + 'html>\n```\n' + `
 
 【重要提示】
 - 必须根据用户要求的风格自由设计CSS样式
@@ -971,7 +971,7 @@ ${extraReq.value ? '- 用户需求：' + extraReq.value : ''}
 - 页面整体应适配容器宽度，不产生横向滚动条
 - 如果样式更适合卡片形状，则不要有背景颜色，除非用户有明确要求
 - 必须输出完整的 </body></html> 结尾
-- 每个tab按钮（data-target）都必须有对应的tab内容div（id匹配），禁止只写按钮不写内容
+- 如果使用 tab 切换：按钮必须用 class="tab-btn"，内容区必须用 class="tab-content"，按钮的 data-target="X" 必须等于对应内容 div 的 id="X"，禁止用其他命名（否则模板里的 JS 切换逻辑会失效）。每个 tab 按钮都必须有对应内容 div，禁止只写按钮不写内容
 - CSS尽量简洁复用class，不要为每个tab单独写大段重复样式
 
 用 \`\`\`html 代码块包裹，只输出代码，不要说明文字。`;

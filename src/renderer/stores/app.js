@@ -13,6 +13,12 @@ export const useAppStore = defineStore('app', () => {
   const confirmMessage = ref('');
   let _confirmResolve = null;
 
+  // 多选项弹窗状态（三按钮及以上）
+  const chooseVisible = ref(false);
+  const chooseMessage = ref('');
+  const chooseOptions = ref([]);
+  let _chooseResolve = null;
+
   function toggleTheme() {
     theme.value = theme.value === 'dark' ? 'light' : 'dark';
     document.documentElement.setAttribute('data-theme', theme.value);
@@ -104,11 +110,31 @@ export const useAppStore = defineStore('app', () => {
   function toastWarning(msg) { toast(msg, 'warning'); errorLogger.logManual(msg, { level: 'warning' }); }
   function toastInfo(msg) { toast(msg, 'info'); }
 
+  // 三选项及以上弹窗
+  // options 形如 [{ value, label, cls?: 'btn--primary'|'btn--secondary'|'btn--danger'|'btn--ghost' }]
+  // 用户点遮罩或取消时 callback 收到 null
+  function chooseAction(msg, options, callback) {
+    chooseMessage.value = msg;
+    chooseOptions.value = options || [];
+    chooseVisible.value = true;
+    _chooseResolve = callback;
+  }
+
+  function chooseResolve(value) {
+    chooseVisible.value = false;
+    if (_chooseResolve) {
+      _chooseResolve(value);
+      _chooseResolve = null;
+    }
+  }
+
   return {
     theme, sidebarCollapsed, glowEnabled, toasts,
     confirmVisible, confirmMessage,
+    chooseVisible, chooseMessage, chooseOptions,
     toggleTheme, setTheme, loadTheme, toggleSidebar, toggleGlow,
     toast, toastSuccess, toastError, toastWarning, toastInfo,
-    confirmAction, confirmYes, confirmNo
+    confirmAction, confirmYes, confirmNo,
+    chooseAction, chooseResolve
   };
 });

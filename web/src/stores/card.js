@@ -198,17 +198,46 @@ export const useCardStore = defineStore('card', () => {
           } else if (file.name.endsWith('.png')) {
             const buffer = await file.arrayBuffer();
             const { cardData: data, imageBase64 } = await readPngCardData(buffer);
-            if (data) {
+
+            if (!data) {
+              // 纯封面 PNG（不含角色卡数据）→ 不动现有 cardData，只设封面
+              coverImageBase64.value = imageBase64 || '';
+              isDirty.value = true;
+              appStore.toastSuccess('已设置封面图（PNG 不含角色卡数据）');
+              return;
+            }
+
+            // PNG 含完整角色卡数据
+            const applyOverwrite = () => {
               loadFromJson(data, file.name.replace('.png', ''));
               coverImageBase64.value = imageBase64 || '';
               appStore.toastSuccess('PNG 导入成功');
-            } else {
-              // 普通PNG图片，创建空白卡并设为封面
-              newCard();
+            };
+            const applyCoverOnly = () => {
               coverImageBase64.value = imageBase64 || '';
-              fileName.value = file.name.replace('.png', '');
-              appStore.toastSuccess('已导入为封面图片，创建了空白角色卡');
+              isDirty.value = true;
+              appStore.toastSuccess('已设置封面图（角色卡数据已忽略）');
+            };
+
+            if (isDirty.value) {
+              // 有未保存改动 → 三选项弹窗
+              appStore.chooseAction(
+                '这张 PNG 含完整角色卡数据。当前编辑的卡有未保存改动，要怎么处理？',
+                [
+                  { value: 'cover', label: '只用它当封面', cls: 'btn--primary' },
+                  { value: 'overwrite', label: '用 PNG 覆盖当前卡', cls: 'btn--secondary' },
+                  { value: 'cancel', label: '取消', cls: 'btn--ghost' },
+                ],
+                (choice) => {
+                  if (choice === 'overwrite') applyOverwrite();
+                  else if (choice === 'cover') applyCoverOnly();
+                }
+              );
+              return;
             }
+
+            // 空白卡或未改动 → 直接覆盖
+            applyOverwrite();
           }
         } catch (err) {
           appStore.toastError('导入失败: ' + err.message);
