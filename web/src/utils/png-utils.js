@@ -12,8 +12,8 @@ export async function readPngCardData(arrayBuffer) {
   const data = new Uint8Array(arrayBuffer);
   const chunks = extractChunks(data);
 
-  // 提取封面图片 base64
-  const imageBase64 = arrayBufferToBase64(arrayBuffer);
+  // 提取封面图片 base64 dataURL（不管有没有 chara chunk 都要带出来给纯封面 PNG 用）
+  const imageBase64 = 'data:image/png;base64,' + arrayBufferToBase64(arrayBuffer);
 
   // 查找 tEXt chunk 中的 chara 数据
   for (const chunk of chunks) {
@@ -30,7 +30,7 @@ export async function readPngCardData(arrayBuffer) {
           for (let i = 0; i < binaryStr.length; i++) bytes[i] = binaryStr.charCodeAt(i);
           const jsonStr = new TextDecoder('utf-8').decode(bytes);
           const json = JSON.parse(jsonStr);
-          return { cardData: json, imageBase64: 'data:image/png;base64,' + imageBase64 };
+          return { cardData: json, imageBase64 };
         } catch (e) {
           console.error('Failed to parse chara data:', e);
         }
@@ -38,7 +38,7 @@ export async function readPngCardData(arrayBuffer) {
     }
   }
 
-  return { cardData: null, imageBase64: null };
+  return { cardData: null, imageBase64 };
 }
 
 /**

@@ -1,5 +1,6 @@
 import { defineStore } from 'pinia';
 import { ref } from 'vue';
+import { buildCardContext } from '../utils/card-context.js';
 
 function defaultYouxi() {
   return {
@@ -75,26 +76,17 @@ export const useAiNiangStore = defineStore('ainiang', () => {
     customModelFile.value = '';
   }
 
-  // 把当前卡的关键字段压成简短摘要，每轮塞 system 让 AI 有 context
-  function buildCardContext(cardData) {
-    if (!cardData) return '';
-    const d = cardData;
-    const has = (s) => s && String(s).trim();
-    if (!has(d.name) && !has(d.description) && !has(d.personality) && !has(d.first_mes)) {
-      return '\n\n（用户当前还没填角色卡内容。）';
-    }
-    const lines = ['', '', '——以下是用户正在编辑的角色卡，聊天时可以参考——'];
-    if (has(d.name)) lines.push(`名字：${d.name}`);
-    if (has(d.personality)) lines.push(`personality：${String(d.personality).slice(0, 200)}`);
-    if (has(d.scenario)) lines.push(`scenario：${String(d.scenario).slice(0, 300)}`);
-    if (has(d.description)) lines.push(`description（前 600 字）：\n${String(d.description).slice(0, 600)}`);
-    if (has(d.first_mes)) lines.push(`first_mes（前 400 字）：\n${String(d.first_mes).slice(0, 400)}`);
-    lines.push('——以上仅作背景，不要主动复述，用户问到再展开——');
-    return lines.join('\n');
-  }
-
-  function buildSystemPrompt(niang, cardData) {
+  // 用 utils/card-context.js 的统一 helper 拼上下文
+  // currentMessage 传当前用户消息，绿灯条目按主 keys 命中才塞
+  function buildSystemPrompt(niang, cardStore, currentMessage = '') {
     const n = niang || youxi.value;
+    const hasCard = cardStore && cardStore.cardData
+      && (cardStore.cardData.name || cardStore.cardData.description
+        || cardStore.cardData.personality || cardStore.cardData.first_mes
+        || (cardStore.worldEntries && cardStore.worldEntries.length > 0));
+    const cardBlock = hasCard
+      ? `\n\n——以下是用户正在编辑的角色卡，聊天时可以参考；不要主动复述，用户问到再展开——\n${buildCardContext(cardStore, currentMessage)}`
+      : '\n\n（用户当前还没填角色卡内容。）';
     return `你叫"${n.name}"，是用户的写作搭子。
 个性：${n.personality}
 说话方式：${n.speakStyle}
@@ -107,7 +99,7 @@ export const useAiNiangStore = defineStore('ainiang', () => {
 - 回应短一点（一般 1~3 句），话题真有料再展开
 - 灵感和闲扯都可以，但别把每句话都拐去推销技术建议
 - 用户没问别端建议，但他抛出片段时可以自然给点想法
-- 中文，能用日常口语就别端着${buildCardContext(cardData)}`;
+- 中文，能用日常口语就别端着${cardBlock}`;
   }
 
   return {

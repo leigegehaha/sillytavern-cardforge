@@ -713,7 +713,7 @@ function createMvuFromVarList(list) {
   /* MVU正则 — 顺序：更新中 → 完整 → 只发送N楼 */
   const existingRegex = cardStore.regexScripts.map(r => r.scriptName);
   const mvuRegex = [
-    { scriptName: '[美化]变量更新中', findRegex: '/<UpdateVariable>([\\s\\S]*?)$/gs',
+    { scriptName: '[美化]变量更新中', findRegex: '/<UpdateVariable>(?![\\s\\S]*<\\/UpdateVariable>)([\\s\\S]*)/gs',
       replaceString: '<details open style="background:rgba(0,0,0,0.15);border:1px solid rgba(100,200,255,0.15);border-radius:6px;padding:8px;margin:4px 0;font-size:12px"><summary style="cursor:pointer;color:#60a5fa">变量更新中...</summary><pre style="white-space:pre-wrap;color:#aaa;margin:4px 0">$1</pre></details>',
       markdownOnly: true, promptOnly: false },
     { scriptName: '[美化]完整变量完成', findRegex: '/<UpdateVariable>([\\s\\S]*?)<\\/UpdateVariable>/gs',

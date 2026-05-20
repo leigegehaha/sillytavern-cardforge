@@ -157,7 +157,7 @@ async function sendMessage() {
   scrollToBottom();
 
   try {
-    const systemPrompt = buildSystemPrompt();
+    const systemPrompt = buildSystemPrompt(text);
     const chatMessages = [
       { role: 'system', content: systemPrompt },
       ...messages.value.slice(-20).map(m => ({ role: m.role === 'user' ? 'user' : 'assistant', content: m.content }))
@@ -173,8 +173,8 @@ async function sendMessage() {
   }
 }
 
-function buildSystemPrompt() {
-  const context = buildCardContext(cardStore);
+function buildSystemPrompt(currentMessage = '') {
+  const context = buildCardContext(cardStore, currentMessage);
   let prompt = `你叫"柚溪"，是用户的写作搭子。
 个性：温和靠谱的写作伙伴，懂角色卡技术也懂创作。能聊灵感能帮改片段，但不会端着也不撒娇，像群里熟人那种。听到具体需求会给具体建议，没需求就轻松聊。
 说话方式：自称"柚溪"或省略；称对方"你"。语气平实带温度，不堆"呢""啦"等语气词。回应短，3 句以内为主，话题真有料再展开。

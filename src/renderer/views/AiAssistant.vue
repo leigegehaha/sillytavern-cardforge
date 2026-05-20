@@ -446,7 +446,7 @@ async function send() {
 }
 
 async function sendSingle(text, niang) {
-  const sysPrompt = niangStore.buildSystemPrompt(niang, cardStore.cardData);
+  const sysPrompt = niangStore.buildSystemPrompt(niang, cardStore, text);
   const history = messages.value.filter(m => m.role === 'user' || m.niangId === niang.id).slice(-10);
   const chatMsgs = [
     { role: 'system', content: sysPrompt },

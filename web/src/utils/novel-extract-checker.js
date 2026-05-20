@@ -271,6 +271,157 @@ function mergeArraysFallback(r1, r2, type) {
 }
 
 // ====================================================================
+// 跨片同名合并（C 方案：AI 合并 + 本地字段并集 fallback）
+// ====================================================================
+
+const TYPE_LABELS = {
+  character: '角色',
+  eventline: '事件线',
+  timeline: '时间线阶段',
+  setting: '设定',
+  item_trajectory: '物品'
+};
+
+function sleepMs(ms) {
+  return new Promise(r => setTimeout(r, ms));
+}
+
+/**
+ * 把同一类提取结果里跨 chunk 同名的多份条目合并成一份
+ * 默认路径就跑（不依赖 R2 双跑），解决跨 chunk 同名重复 bug
+ *
+ * 流程：按主键分组 → 单一组直接保留 → 重复组喂 AI 合并 → AI 失败 fallback 本地字段并集
+ */
+export async function mergeSameNameByAI(apiStore, array, type) {
+  if (!Array.isArray(array) || array.length === 0) return array || [];
+
+  const getKey = (item) => item?.name || item?.stage_name || item?.item_name || JSON.stringify(item);
+  const groups = new Map();
+  const order = [];
+  for (const item of array) {
+    const key = getKey(item);
+    if (!groups.has(key)) {
+      groups.set(key, []);
+      order.push(key);
+    }
+    groups.get(key).push(item);
+  }
+
+  const merged = [];
+  for (const key of order) {
+    const items = groups.get(key);
+    if (items.length === 1) {
+      merged.push(items[0]);
+      continue;
+    }
+    let result = null;
+    if (apiStore.isConfigured) {
+      try {
+        result = await mergeGroupByAI(apiStore, items, type, key);
+      } catch (e) {
+        result = null;
+      }
+      await sleepMs(13000);
+    }
+    if (!result) {
+      result = mergeItemsLocal(items);
+    }
+    merged.push(result);
+  }
+
+  return merged;
+}
+
+async function mergeGroupByAI(apiStore, items, type, name) {
+  const typeName = TYPE_LABELS[type] || type;
+  const sysMsg = '你是合并引擎。把同一主体在小说不同片段独立提取出的多份信息合并成一条完整的，信息取并集别丢，输出含 1 个对象的 JSON 数组。' + JSON_QUOTE_RULE;
+  const userPrompt = `## 任务：跨片合并同名条目（type: ${type}）
+
+这是同一个${typeName}「${name}」在小说不同片段独立提取的 ${items.length} 份信息。
+
+合并规则：
+- 信息**取并集**，不丢任何独有事实
+- 数组字段（tracks / passages / events 等）去重合并
+- 章节号取信息更完整的版本
+- 矛盾时保留多份并用 " / " 分隔
+- 字段结构跟原条目一致
+
+===分片提取结果===
+${JSON.stringify(items, null, 2)}
+
+只输出 JSON 数组（含 1 个合并后的对象），不要其他文字。`;
+
+  const result = await apiStore.chat([
+    { role: 'system', content: sysMsg },
+    { role: 'user', content: userPrompt }
+  ], {
+    temperature: 0.3,
+    maxTokens: apiStore.getModelMaxTokens(apiStore.activeProvider?.model)
+  });
+  const parsed = parseAiJsonArray(result);
+  const normalized = normalizeExtractionArray(parsed, type);
+  return normalized.length > 0 ? normalized[0] : null;
+}
+
+// 本地字段并集合并（AI 失败时的 fallback，不丢信息，不能用旧 mergeArraysFallback 的保留首条策略）
+function mergeItemsLocal(items) {
+  if (!items || items.length === 0) return null;
+  if (items.length === 1) return items[0];
+  let base = JSON.parse(JSON.stringify(items[0]));
+  for (let i = 1; i < items.length; i++) {
+    base = mergeValuesLocal(base, items[i]);
+  }
+  return base;
+}
+
+function mergeValuesLocal(a, b) {
+  if (a == null || a === '') return b;
+  if (b == null || b === '') return a;
+
+  // 类型不一致就保留 a（基础值），不强行混合
+  if (Array.isArray(a) !== Array.isArray(b)) return a;
+  if (typeof a !== typeof b) return a;
+
+  // 数组：并集去重
+  if (Array.isArray(a)) {
+    const seen = new Set(a.map(x => JSON.stringify(x)));
+    const result = [...a];
+    for (const x of b) {
+      const s = JSON.stringify(x);
+      if (!seen.has(s)) {
+        seen.add(s);
+        result.push(x);
+      }
+    }
+    return result;
+  }
+
+  // 对象：字段并集递归合并
+  if (typeof a === 'object') {
+    const result = { ...a };
+    for (const [k, vb] of Object.entries(b)) {
+      if (vb == null || vb === '') continue;
+      const va = result[k];
+      if (va == null || va === '') {
+        result[k] = vb;
+      } else {
+        result[k] = mergeValuesLocal(va, vb);
+      }
+    }
+    return result;
+  }
+
+  // 字符串：不同则拼接
+  if (typeof a === 'string') {
+    if (a === b || a.includes(b) || b.includes(a)) return a;
+    return a + ' / ' + b;
+  }
+
+  // 数字 / 布尔等标量：保留 a
+  return a;
+}
+
+// ====================================================================
 // 整体质量评分
 // ====================================================================
 

@@ -326,7 +326,7 @@ const regexTemplates = [
   },
   {
     name: '变量更新中美化（流式）',
-    scriptName: '[美化]变量更新中', findRegex: '/<UpdateVariable>([\\s\\S]*?)$/gs',
+    scriptName: '[美化]变量更新中', findRegex: '/<UpdateVariable>(?![\\s\\S]*<\\/UpdateVariable>)([\\s\\S]*)/gs',
     replaceString: '<details open style="background:rgba(0,0,0,0.15);border:1px solid rgba(100,200,255,0.15);border-radius:6px;padding:8px;margin:4px 0;font-size:12px"><summary style="cursor:pointer;color:#60a5fa">变量更新中...</summary><pre style="white-space:pre-wrap;color:#aaa;margin:4px 0">$1</pre></details>',
     markdownOnly: true, promptOnly: false, minDepth: null, maxDepth: null
   },
@@ -355,7 +355,7 @@ const fullSetTemplates = [
   { scriptName: '[美化]完整变量完成', findRegex: '/<UpdateVariable>([\\s\\S]*?)<\\/UpdateVariable>/gs',
     replaceString: '<details style="background:rgba(0,0,0,0.15);border:1px solid rgba(255,255,255,0.06);border-radius:6px;padding:8px;margin:4px 0;font-size:12px"><summary style="cursor:pointer;color:#888">变量更新</summary><pre style="white-space:pre-wrap;color:#aaa;margin:4px 0">$1</pre></details>',
     markdownOnly: true, promptOnly: false, minDepth: null, maxDepth: null },
-  { scriptName: '[美化]变量更新中', findRegex: '/<UpdateVariable>([\\s\\S]*?)$/gs',
+  { scriptName: '[美化]变量更新中', findRegex: '/<UpdateVariable>(?![\\s\\S]*<\\/UpdateVariable>)([\\s\\S]*)/gs',
     replaceString: '<details open style="background:rgba(0,0,0,0.15);border:1px solid rgba(100,200,255,0.15);border-radius:6px;padding:8px;margin:4px 0;font-size:12px"><summary style="cursor:pointer;color:#60a5fa">变量更新中...</summary><pre style="white-space:pre-wrap;color:#aaa;margin:4px 0">$1</pre></details>',
     markdownOnly: true, promptOnly: false, minDepth: null, maxDepth: null },
   { scriptName: '[清理]旧楼层', findRegex: '/<StatusPlaceHolderImpl\\s*\\/>/g',

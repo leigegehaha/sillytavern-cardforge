@@ -314,7 +314,7 @@ import {
   chunkNovel, extractionToWorldEntries,
   normalizeExtractionArray, estimateTotalCalls, estimateTotalTime, estimateTokens
 } from '../utils/novel-extract-format.js';
-import { aiSelfCheckExtraction, mergeR1R2, summarizeExtractionQuality } from '../utils/novel-extract-checker.js';
+import { aiSelfCheckExtraction, mergeR1R2, mergeSameNameByAI, summarizeExtractionQuality } from '../utils/novel-extract-checker.js';
 
 const cardStore = useCardStore();
 const apiStore = useApiStore();
@@ -535,8 +535,14 @@ async function runTypeForAllChunks(type) {
 
   let finalResults = r1Results;
 
+  // 跨片同名合并（默认路径必跑，解决跨 chunk 同名重复 bug）
+  if (!stopFlag.value && finalResults.length > 1) {
+    appStore.toastInfo(`[${type}] 跨片合并同名条目中...`);
+    finalResults = await mergeSameNameByAI(apiStore, finalResults, type);
+  }
+
   if (config.enableR2DoubleCheck && !stopFlag.value) {
-    const r2Results = [];
+    let r2Results = [];
     progress[type].done = 0;
     appStore.toastInfo(`[${type}] R2 双跑开始...`);
     for (let i = 0; i < chunks.length; i++) {
@@ -548,8 +554,12 @@ async function runTypeForAllChunks(type) {
       progress[type].done = i + 1;
       if (i < chunks.length - 1) await sleep(13000);
     }
+    if (!stopFlag.value && r2Results.length > 1) {
+      appStore.toastInfo(`[${type}] R2 跨片合并同名条目中...`);
+      r2Results = await mergeSameNameByAI(apiStore, r2Results, type);
+    }
     if (!stopFlag.value) {
-      finalResults = await mergeR1R2(apiStore, r1Results, r2Results, type);
+      finalResults = await mergeR1R2(apiStore, finalResults, r2Results, type);
     }
   }
 

@@ -56,9 +56,10 @@
           <div class="hint mb-sm">从下拉选一条世界书条目，AI 按方向重写</div>
           <div class="form-group">
             <label>条目</label>
+            <input class="input mb-sm" v-model="entrySearch" placeholder="搜 标题 / 关键词 / 正文 / #id">
             <select class="select" v-model="entrySelectedId">
-              <option value="">— 选择条目 —</option>
-              <option v-for="e in worldEntries" :key="e.id" :value="e.id">
+              <option value="">— 选择条目（{{ filteredEntries.length }} / {{ worldEntries.length }}）—</option>
+              <option v-for="e in filteredEntries" :key="e.id" :value="e.id">
                 #{{ e.id }} {{ e.comment || '(未命名)' }}
               </option>
             </select>
@@ -168,6 +169,7 @@ import { useRoute, useRouter } from 'vue-router';
 import { useCardStore } from '../stores/card.js';
 import { useApiStore } from '../stores/api.js';
 import { useAppStore } from '../stores/app.js';
+import { buildCardContext } from '../utils/card-context.js';
 
 const cardStore = useCardStore();
 const apiStore = useApiStore();
@@ -297,14 +299,9 @@ function copyResult() {
   }).catch(() => appStore.toastError('复制失败'));
 }
 
-function cardCtx() {
-  const d = cardStore.cardData;
-  const lines = [];
-  if (d.name) lines.push(`name：${d.name}`);
-  if (d.personality) lines.push(`personality：${d.personality.slice(0, 200)}`);
-  if (d.scenario) lines.push(`scenario：${d.scenario.slice(0, 300)}`);
-  if (d.description) lines.push(`description：${d.description.slice(0, 600)}`);
-  return lines.join('\n');
+// 拼角色卡上下文，传 matchText 启用绿灯关键词匹配
+function cardCtx(matchText = '') {
+  return buildCardContext(cardStore, matchText);
 }
 
 // ========== 工具1：写开场白 ==========
@@ -316,9 +313,10 @@ async function runGreeting() {
   aiResult.value = '';
   try {
     const sys = '你是 SillyTavern 角色卡 first_mes 写作专家。按"绝对零度+特征差异化+关系禁标签"原则写。禁止八股化语言（似乎/仿佛/嘴角微微上扬）。直接写场景，不要写心理旁白。';
+    const matchText = `${greetingStyle.value || ''} ${cardStore.cardData.first_mes || ''}`;
     const usr = `请基于以下角色卡信息，写一个 first_mes（开场白）：
 
-${cardCtx()}
+${cardCtx(matchText)}
 
 ${greetingStyle.value ? `风格倾向：${greetingStyle.value}` : ''}
 字数控制：约 ${greetingLen.value} 字
@@ -342,6 +340,25 @@ function applyGreeting() {
 // ========== 工具2：优化选中条目 ==========
 const entrySelectedId = ref('');
 const entryDirection = ref('');
+const entrySearch = ref('');
+const filteredEntries = computed(() => {
+  const q = entrySearch.value.trim().toLowerCase();
+  if (!q) return worldEntries.value;
+  return worldEntries.value.filter(e => {
+    if (String(e.id).includes(q)) return true;
+    if ((e.comment || '').toLowerCase().includes(q)) return true;
+    if ((e.content || '').toLowerCase().includes(q)) return true;
+    const keys = Array.isArray(e.keys) ? e.keys : [];
+    if (keys.some(k => String(k).toLowerCase().includes(q))) return true;
+    return false;
+  });
+});
+// 搜索过滤后，如果当前选中的 id 不在结果里，自动清掉避免下拉显示空白却 id 还在
+watch(filteredEntries, (list) => {
+  if (entrySelectedId.value && !list.some(e => e.id === entrySelectedId.value)) {
+    entrySelectedId.value = '';
+  }
+});
 
 const worldEntries = computed(() => cardStore.worldEntries || []);
 
@@ -352,6 +369,7 @@ async function runOptimizeEntry() {
     const entry = worldEntries.value.find(e => e.id === entrySelectedId.value);
     if (!entry) throw new Error('未找到该条目');
     const sys = '你是 SillyTavern 世界书条目改写专家。按"绝对零度+白描+特征差异化"原则改写，禁八股语言。保持原条目的核心信息和长度框架。';
+    const matchText = `${(entry.keys || []).join(' ')} ${entryDirection.value || ''}`;
     const usr = `请改写以下世界书条目：
 
 【条目名】${entry.comment || '(未命名)'}
@@ -361,6 +379,9 @@ ${entry.content || ''}
 
 【改写方向】
 ${entryDirection.value || '提升写作质量，去除套路化描写'}
+
+——以下是角色卡其他背景设定，改写时保持风格和世界观自洽——
+${cardCtx(matchText)}
 
 直接输出改写后的完整内容，不要前缀、不要解释。`;
     aiResult.value = await callAi(sys, usr, { temperature: 0.7 });
@@ -397,7 +418,7 @@ async function runNpcName() {
 性别：${npcGender.value}
 风格：${npcStyle.value || '请按当前角色卡的整体调性自由发挥'}
 当前角色卡参考：
-${cardCtx() || '(空)'}
+${cardCtx(npcStyle.value) || '(空)'}
 
 格式：每个名字一行，下面缩进一行写一句话性格暗示。
 不要编号，不要前缀。`;
@@ -445,12 +466,16 @@ async function runEnrichDesc() {
     const desc = cardStore.cardData.description || '';
     if (!desc.trim()) throw new Error('当前 description 为空');
     const sys = '你是 SillyTavern 角色卡 description 写作专家。按"绝对零度+特征差异化+关系禁标签"原则补全。禁八股化语言。原有内容尽量保留，只补空缺。';
+    const matchText = `${enrichFocus.value || ''} ${desc.slice(0, 500)}`;
     const usr = `请基于现有 description 补全空缺，输出完整新版（包含原有内容 + 补充部分）：
 
 【现有 description】
 ${desc}
 
 ${enrichFocus.value ? `【侧重补充】\n${enrichFocus.value}` : '请自行判断哪些常见维度缺失（外貌特征 / 日常习惯 / 关系 / 背景伏笔等）'}
+
+——以下是角色卡其他背景设定，补全时保持风格和世界观自洽——
+${cardCtx(matchText)}
 
 输出完整 description，不要前缀、不要解释、不要 Markdown 包裹。`;
     aiResult.value = await callAi(sys, usr, { temperature: 0.75 });
