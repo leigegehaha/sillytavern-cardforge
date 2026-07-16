@@ -3,12 +3,14 @@ import { createPinia } from 'pinia';
 import { createRouter, createWebHashHistory } from 'vue-router';
 import App from './App.vue';
 import errorLogger from './utils/error-logger.js';
+import { useAuthStore } from './stores/auth.js';
 import './styles/global.css';
 
 errorLogger.install();
 
 const routes = [
   { path: '/', redirect: '/basic' },
+  { path: '/login', component: () => import('./views/Login.vue') },
   // 必填
   { path: '/basic', component: () => import('./views/BasicInfo.vue') },
   { path: '/charsetting', component: () => import('./views/CharSetting.vue') },
@@ -48,5 +50,21 @@ app.config.errorHandler = (err, instance, info) => {
   }
 };
 app.use(createPinia());
+
+// 恢复登录态（同步，从 localStorage 读取并注入 apiStore）
+const auth = useAuthStore();
+auth.restore();
+
 app.use(router);
+
+// 路由守卫：未登录跳登录页，已登录不可访问登录页
+router.beforeEach((to) => {
+  if (!auth.isLoggedIn && to.path !== '/login') {
+    return '/login';
+  }
+  if (auth.isLoggedIn && to.path === '/login') {
+    return '/';
+  }
+});
+
 app.mount('#app');
