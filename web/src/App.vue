@@ -1,7 +1,7 @@
 <template>
   <div class="app" :class="{ 'sidebar-open': sidebarOpen }">
-    <!-- 顶部站点栏（logo + 站名 + 导航 + 浏览量） -->
-    <header class="site-header">
+    <!-- 顶部站点栏（已登录显示：logo + 站名 + 导航 + 用户区） -->
+    <header class="site-header" v-if="auth.isLoggedIn">
       <div class="site-header__left">
         <button class="site-header__menu" @click="sidebarOpen = !sidebarOpen" aria-label="菜单">
           <span></span><span></span><span></span>
@@ -18,13 +18,20 @@
       </nav>
       <div class="site-header__right">
         <span class="site-header__counter" v-if="viewCount !== null" title="页面浏览量">浏览 {{ viewCount }}</span>
+        <span class="site-header__user" v-if="auth.user" :title="auth.user.username">{{ auth.user.display_name || auth.user.username }}</span>
+        <span class="site-header__balance" v-if="auth.user" title="账户余额">
+          ${{ (auth.user.balance_usd ?? 0).toFixed(2) }}
+          <button class="site-header__refresh" @click="refreshBalance" title="刷新余额">↻</button>
+        </span>
+        <a class="btn btn--sm btn--ghost site-header__btn" href="https://deepseektavern.com" target="_blank" rel="noopener">充值</a>
+        <button class="btn btn--sm btn--ghost site-header__btn" @click="logout">退出</button>
         <button class="btn btn--sm btn--accent site-header__btn" @click="importCard">导入</button>
         <button class="btn btn--sm btn--primary site-header__btn" @click="exportCard">导出</button>
       </div>
     </header>
 
-    <!-- 侧边栏 -->
-    <aside class="sidebar" @click.self="sidebarOpen = false">
+    <!-- 侧边栏（已登录显示） -->
+    <aside class="sidebar" v-if="auth.isLoggedIn" @click.self="sidebarOpen = false">
       <nav class="sidebar__nav">
         <div class="sidebar__section">文件</div>
         <button class="sidebar__btn" @click="importCard">导入 PNG/JSON</button>
@@ -56,25 +63,25 @@
     </aside>
 
     <!-- 遮罩层（移动端点击关闭侧边栏） -->
-    <div class="overlay" v-if="sidebarOpen" @click="sidebarOpen = false"></div>
+    <div class="overlay" v-if="sidebarOpen && auth.isLoggedIn" @click="sidebarOpen = false"></div>
 
-    <!-- 主内容 -->
-    <main class="main">
+    <!-- 主内容（未登录时全屏，用于登录页） -->
+    <main class="main" :class="{ 'main--auth': !auth.isLoggedIn }">
       <router-view v-slot="{ Component }">
-        <keep-alive>
+        <keep-alive :exclude="['Login']">
           <component :is="Component" />
         </keep-alive>
       </router-view>
     </main>
 
-    <!-- 全局浮动工具集（AI 助手 / 诊断页隐藏） -->
-    <FloatingTools v-if="$route.path !== '/assistant' && $route.path !== '/diagnostic'" />
+    <!-- 全局浮动工具集（已登录 + 非 AI 助手 / 诊断页） -->
+    <FloatingTools v-if="auth.isLoggedIn && $route.path !== '/assistant' && $route.path !== '/diagnostic'" />
 
-    <!-- 错误日志弹窗 -->
-    <ErrorLogModal :visible="showErrorLog" @close="showErrorLog = false" />
+    <!-- 错误日志弹窗（已登录） -->
+    <ErrorLogModal v-if="auth.isLoggedIn" :visible="showErrorLog" @close="showErrorLog = false" />
 
-    <!-- 自定义确认弹窗 -->
-    <div v-if="appStore.confirmVisible" class="cf-confirm-overlay" @click.self="appStore.confirmNo()">
+    <!-- 自定义确认弹窗（已登录） -->
+    <div v-if="auth.isLoggedIn && appStore.confirmVisible" class="cf-confirm-overlay" @click.self="appStore.confirmNo()">
       <div class="cf-confirm-dialog">
         <div class="cf-confirm-msg">{{ appStore.confirmMessage }}</div>
         <div class="cf-confirm-btns">
@@ -84,8 +91,8 @@
       </div>
     </div>
 
-    <!-- 多选项弹窗（三按钮及以上） -->
-    <div v-if="appStore.chooseVisible" class="cf-confirm-overlay" @click.self="appStore.chooseResolve(null)">
+    <!-- 多选项弹窗（已登录） -->
+    <div v-if="auth.isLoggedIn && appStore.chooseVisible" class="cf-confirm-overlay" @click.self="appStore.chooseResolve(null)">
       <div class="cf-confirm-dialog">
         <div class="cf-confirm-msg">{{ appStore.chooseMessage }}</div>
         <div class="cf-confirm-btns">
@@ -109,15 +116,19 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue';
+import { ref, onMounted, watch } from 'vue';
+import { useRouter } from 'vue-router';
 import { useCardStore } from './stores/card.js';
 import { useAppStore } from './stores/app.js';
+import { useAuthStore } from './stores/auth.js';
 import ErrorLogModal from './components/ErrorLogModal.vue';
 import FloatingTools from './components/FloatingTools.vue';
 import { parseStWorldbookEntries } from './utils/st-worldbook-import.js';
 
+const router = useRouter();
 const cardStore = useCardStore();
 const appStore = useAppStore();
+const auth = useAuthStore();
 const sidebarOpen = ref(false);
 const showErrorLog = ref(false);
 const viewCount = ref(null);
@@ -128,9 +139,11 @@ onMounted(() => {
     .then(r => r.json())
     .then(data => { if (data && typeof data.count === 'number') viewCount.value = data.count; })
     .catch(() => {});
+});
 
-  // Check for auto-saved card data
-  if (cardStore.hasAutosave()) {
+// 登录成功后检查自动保存的角色卡
+watch(() => auth.isLoggedIn, (loggedIn) => {
+  if (loggedIn && cardStore.hasAutosave()) {
     appStore.confirmAction(
       '检测到上次未保存的编辑内容，是否恢复？',
       () => {
@@ -144,6 +157,22 @@ onMounted(() => {
     );
   }
 });
+
+async function refreshBalance() {
+  try {
+    await auth.refreshBalance();
+    appStore.toastSuccess('余额已刷新');
+  } catch (e) {
+    appStore.toastError(e.message || '刷新失败');
+  }
+}
+
+function logout() {
+  auth.logout();
+  sidebarOpen.value = false;
+  appStore.toastInfo('已退出登录');
+  router.push('/login');
+}
 
 const navSections = [
   { title: '必填', links: [
