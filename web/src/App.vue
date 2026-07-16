@@ -13,7 +13,7 @@
         <a href="https://deepseektavern.com" target="_blank" rel="noopener">酒馆大模型</a>
         <a href="https://cards.deepseektavern.com" target="_blank" rel="noopener">角色卡</a>
         <a href="https://chat.deepseektavern.com" target="_blank" rel="noopener">在线聊天</a>
-        <a href="https://docs.deepseektavern.com" target="_blank" rel="noopener">酒馆官方文档</a>
+        <a href="https://sillytaverncn.com" target="_blank" rel="noopener">酒馆官方文档</a>
         <a href="https://launch.deepseektavern.com" target="_blank" rel="noopener">酒馆一键启动器</a>
       </nav>
       <div class="site-header__right">
