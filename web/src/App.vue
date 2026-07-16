@@ -1,14 +1,25 @@
 <template>
   <div class="app" :class="{ 'sidebar-open': sidebarOpen }">
-    <!-- 移动端顶部栏 -->
-    <header class="topbar">
-      <button class="topbar__menu" @click="sidebarOpen = !sidebarOpen">
-        <span></span><span></span><span></span>
-      </button>
-      <h1 class="topbar__title">CardForge</h1>
-      <div class="topbar__actions">
-        <button class="btn btn--sm btn--accent" @click="importCard">导入</button>
-        <button class="btn btn--sm btn--primary" @click="exportCard">导出</button>
+    <!-- 顶部站点栏（logo + 站名 + 导航 + 浏览量） -->
+    <header class="site-header">
+      <div class="site-header__left">
+        <button class="site-header__menu" @click="sidebarOpen = !sidebarOpen" aria-label="菜单">
+          <span></span><span></span><span></span>
+        </button>
+        <img src="/logo.png" alt="logo" class="site-header__logo" />
+        <span class="site-header__name">酒馆角色卡锻造器</span>
+      </div>
+      <nav class="site-header__nav">
+        <a href="https://deepseektavern.com" target="_blank" rel="noopener">酒馆大模型</a>
+        <a href="https://cards.deepseektavern.com" target="_blank" rel="noopener">角色卡</a>
+        <a href="https://chat.deepseektavern.com" target="_blank" rel="noopener">在线聊天</a>
+        <a href="https://docs.deepseektavern.com" target="_blank" rel="noopener">酒馆官方文档</a>
+        <a href="https://launch.deepseektavern.com" target="_blank" rel="noopener">酒馆一键启动器</a>
+      </nav>
+      <div class="site-header__right">
+        <span class="site-header__counter" v-if="viewCount !== null" title="页面浏览量">浏览 {{ viewCount }}</span>
+        <button class="btn btn--sm btn--accent site-header__btn" @click="importCard">导入</button>
+        <button class="btn btn--sm btn--primary site-header__btn" @click="exportCard">导出</button>
       </div>
     </header>
 
@@ -109,8 +120,15 @@ const cardStore = useCardStore();
 const appStore = useAppStore();
 const sidebarOpen = ref(false);
 const showErrorLog = ref(false);
+const viewCount = ref(null);
 
 onMounted(() => {
+  // 页面浏览量统计（同源 PHP 计数器，POST 避免预取计数）
+  fetch('/counter.php', { method: 'POST' })
+    .then(r => r.json())
+    .then(data => { if (data && typeof data.count === 'number') viewCount.value = data.count; })
+    .catch(() => {});
+
   // Check for auto-saved card data
   if (cardStore.hasAutosave()) {
     appStore.confirmAction(
