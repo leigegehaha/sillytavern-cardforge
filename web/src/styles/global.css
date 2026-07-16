@@ -652,3 +652,150 @@ body::after {
     flex-wrap: wrap;
   }
 }
+
+/* ===== 登录/注册页 ===== */
+.auth-page {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+
+.auth-card {
+  width: 100%;
+  max-width: 380px;
+  background: var(--cf-bg-card-strong);
+  backdrop-filter: blur(calc(var(--cf-blur) + 6px));
+  -webkit-backdrop-filter: blur(calc(var(--cf-blur) + 6px));
+  border: 1px solid var(--cf-border);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.05), 0 8px 32px rgba(0, 0, 0, 0.5);
+  border-radius: 12px;
+  padding: 32px 28px;
+}
+
+.auth-card__brand {
+  text-align: center;
+  margin-bottom: 24px;
+}
+
+.auth-card__logo {
+  width: 56px;
+  height: 56px;
+  border-radius: 12px;
+  margin-bottom: 12px;
+}
+
+.auth-card__title {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--cf-accent);
+  margin-bottom: 4px;
+}
+
+.auth-card__subtitle {
+  font-size: 12px;
+  color: var(--cf-text-muted);
+}
+
+.auth-tabs {
+  display: flex;
+  margin-bottom: 20px;
+  background: var(--cf-bg-input);
+  border-radius: 6px;
+  padding: 3px;
+  gap: 3px;
+}
+
+.auth-tabs button {
+  flex: 1;
+  padding: 8px;
+  background: none;
+  border: none;
+  color: var(--cf-text-muted);
+  font-size: 14px;
+  cursor: pointer;
+  border-radius: 4px;
+  transition: all 0.15s;
+}
+
+.auth-tabs button.active {
+  background: var(--cf-accent-dim);
+  color: var(--cf-accent);
+}
+
+.auth-submit {
+  width: 100%;
+  margin-top: 4px;
+  padding: 10px;
+  font-size: 14px;
+}
+
+.auth-code-row {
+  display: flex;
+  gap: 8px;
+}
+
+.auth-code-row .input {
+  flex: 1;
+}
+
+.auth-footer {
+  margin-top: 20px;
+  text-align: center;
+  font-size: 12px;
+  color: var(--cf-text-muted);
+  line-height: 1.6;
+}
+
+.auth-footer a {
+  color: var(--cf-primary);
+  text-decoration: none;
+}
+
+.auth-footer a:hover {
+  text-decoration: underline;
+}
+
+/* main 未登录时全屏（无侧栏留白） */
+.main--auth {
+  margin-left: 0 !important;
+  padding: 0 !important;
+}
+
+/* 顶栏用户区 */
+.site-header__user {
+  font-size: 13px;
+  color: var(--cf-text);
+  white-space: nowrap;
+  max-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.site-header__balance {
+  font-size: 12px;
+  color: var(--cf-accent);
+  padding: 4px 8px;
+  background: var(--cf-accent-dim);
+  border: 1px solid rgba(255, 215, 0, 0.2);
+  border-radius: 12px;
+  white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.site-header__refresh {
+  background: none;
+  border: none;
+  color: var(--cf-accent);
+  cursor: pointer;
+  font-size: 13px;
+  padding: 0 2px;
+  line-height: 1;
+}
+
+.site-header__refresh:hover {
+  opacity: 0.7;
+}
