@@ -420,9 +420,33 @@ export const useApiStore = defineStore('api', () => {
     return [];
   }
 
+  // 酒馆大模型 provider（登录后由 auth store 自动配置）
+  function applyTavernProvider(api) {
+    const idx = providers.value.findIndex(p => p.id === 'tavern');
+    const provider = {
+      id: 'tavern',
+      name: '酒馆大模型',
+      type: 'openai',
+      baseUrl: '/v1',           // 相对路径，走站点 nginx 反代到 deepseektavern.com
+      apiKey: api.key,
+      model: api.model || 'deepseek-tavern-v2-pro',
+      temperature: 0.8,
+      enabled: true
+    };
+    if (idx >= 0) providers.value[idx] = provider;
+    else providers.value.push(provider);
+    activeProviderId.value = 'tavern';
+  }
+
+  function removeTavernProvider() {
+    const idx = providers.value.findIndex(p => p.id === 'tavern');
+    if (idx >= 0) providers.value.splice(idx, 1);
+    if (activeProviderId.value === 'tavern') activeProviderId.value = null;
+  }
+
   return {
     providers, activeProviderId, activeProvider, isConfigured,
     chat, chatWithProvider, getModelMaxTokens, fetchModels, loadFromDisk, saveToDisk, addProvider, removeProvider, initDefaults,
-    setActiveProvider
+    setActiveProvider, applyTavernProvider, removeTavernProvider
   };
 });
