@@ -1,18 +1,21 @@
-/* CardForge Web - 全局样式 */
+/* CardForge Web - 全局样式（毛玻璃风格，对齐 chat.deepseektavern.com） */
 :root {
-  --cf-bg: #0d1117;
-  --cf-bg-card: rgba(22, 27, 34, 0.9);
-  --cf-bg-input: rgba(0, 0, 0, 0.3);
+  --cf-bg: #0a1628;
+  --cf-bg-card: rgba(15, 31, 56, 0.50);
+  --cf-bg-card-strong: rgba(15, 31, 56, 0.66);
+  --cf-bg-input: rgba(0, 0, 0, 0.28);
   --cf-text: #e6edf3;
   --cf-text-muted: #8b949e;
   --cf-accent: #ffd700;
   --cf-accent-dim: rgba(255, 215, 0, 0.15);
-  --cf-primary: #58a6ff;
-  --cf-border: rgba(255, 255, 255, 0.1);
+  --cf-primary: #5b9eff;
+  --cf-border: rgba(255, 255, 255, 0.08);
+  --cf-border-hover: rgba(255, 255, 255, 0.14);
   --cf-danger: #f85149;
   --cf-success: #3fb950;
   --cf-warning: #d29922;
   --cf-radius: 8px;
+  --cf-blur: 20px;
   --cf-font: 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
   --cf-font-mono: 'Cascadia Code', 'Fira Code', 'Consolas', monospace;
   --sidebar-width: 220px;
@@ -20,13 +23,49 @@
 
 * { margin: 0; padding: 0; box-sizing: border-box; }
 
+html { background: #0a1628; }
+
 body {
   font-family: var(--cf-font);
-  background: var(--cf-bg);
+  background: transparent;
   color: var(--cf-text);
   line-height: 1.6;
   min-height: 100vh;
   -webkit-tap-highlight-color: transparent;
+  position: relative;
+  overflow-x: hidden;
+}
+
+/* 氛围背景层：深蓝渐变光晕，为毛玻璃面板提供可模糊的内容 */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: -2;
+  pointer-events: none;
+  background:
+    radial-gradient(circle at 18% 22%, rgba(59, 130, 246, 0.22), transparent 42%),
+    radial-gradient(circle at 82% 16%, rgba(91, 158, 255, 0.18), transparent 46%),
+    radial-gradient(circle at 72% 82%, rgba(37, 99, 235, 0.20), transparent 48%),
+    radial-gradient(circle at 26% 78%, rgba(168, 85, 247, 0.14), transparent 44%),
+    #0a1628;
+  filter: saturate(1.05);
+  animation: cfAmbientShift 26s ease-in-out infinite alternate;
+}
+
+/* 暗角覆盖，让中心内容更聚焦 */
+body::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background: radial-gradient(ellipse at center, transparent 38%, rgba(4, 6, 16, 0.45) 88%, rgba(2, 3, 10, 0.72) 100%);
+}
+
+@keyframes cfAmbientShift {
+  0%   { transform: translate3d(0, 0, 0) scale(1); }
+  100% { transform: translate3d(-2.5%, 2%, 0) scale(1.07); }
 }
 
 /* Layout */
@@ -40,8 +79,11 @@ body {
   position: fixed;
   top: 0; left: 0; right: 0;
   height: 48px;
-  background: var(--cf-bg-card);
+  background: var(--cf-bg-card-strong);
+  backdrop-filter: blur(var(--cf-blur));
+  -webkit-backdrop-filter: blur(var(--cf-blur));
   border-bottom: 1px solid var(--cf-border);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.04);
   z-index: 100;
   padding: 0 12px;
   align-items: center;
@@ -82,8 +124,11 @@ body {
   position: fixed;
   left: 0; top: 0; bottom: 0;
   width: var(--sidebar-width);
-  background: var(--cf-bg-card);
+  background: var(--cf-bg-card-strong);
+  backdrop-filter: blur(var(--cf-blur));
+  -webkit-backdrop-filter: blur(var(--cf-blur));
   border-right: 1px solid var(--cf-border);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.04);
   display: flex;
   flex-direction: column;
   z-index: 200;
@@ -188,7 +233,10 @@ body {
 
 .card {
   background: var(--cf-bg-card);
+  backdrop-filter: blur(var(--cf-blur));
+  -webkit-backdrop-filter: blur(var(--cf-blur));
   border: 1px solid var(--cf-border);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.04), 0 4px 24px rgba(0, 0, 0, 0.25);
   border-radius: var(--cf-radius);
   margin-bottom: 16px;
 }
@@ -323,13 +371,15 @@ body {
 }
 
 .cf-confirm-dialog {
-  background: var(--cf-bg-card);
+  background: rgba(15, 31, 56, 0.82);
+  backdrop-filter: blur(calc(var(--cf-blur) + 6px));
+  -webkit-backdrop-filter: blur(calc(var(--cf-blur) + 6px));
   border: 1px solid var(--cf-border);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.05), 0 8px 32px rgba(0, 0, 0, 0.5);
   border-radius: 12px;
   padding: 24px;
   min-width: 300px;
   max-width: 90vw;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
 }
 
 .cf-confirm-msg {
