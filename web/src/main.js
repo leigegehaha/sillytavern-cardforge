@@ -32,6 +32,7 @@ const routes = [
   { path: '/sandbox', component: () => import('./views/StatusBarSandbox.vue') },
   { path: '/diagnostic', component: () => import('./views/CardDiagnostic.vue') },
   { path: '/assistant', component: () => import('./views/AiAssistant.vue') },
+  { path: '/image-gen', component: () => import('./views/ImageGen.vue') },
   { path: '/stats', component: () => import('./views/Statistics.vue') },
   // 设置
   { path: '/api', component: () => import('./views/ApiSettings.vue') },
