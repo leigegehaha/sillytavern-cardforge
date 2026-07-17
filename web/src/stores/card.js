@@ -267,6 +267,26 @@ export const useCardStore = defineStore('card', () => {
     }
   }
 
+  async function exportPngV3() {
+    const appStore = useAppStore();
+    if (!coverImageBase64.value) {
+      appStore.toastError('没有封面图片，请先生成或导入一张');
+      return;
+    }
+    try {
+      const v3 = JSON.parse(JSON.stringify(card.value));
+      v3.spec = 'chara_card_v3';
+      v3.spec_version = '3.0';
+      const pngBuffer = await writePngCardData(coverImageBase64.value, v3, true);
+      const blob = new Blob([pngBuffer], { type: 'image/png' });
+      const name = (card.value.data.name || 'character') + '_v3.png';
+      downloadBlob(blob, name);
+      appStore.toastSuccess('V3 角色卡导出成功');
+    } catch (err) {
+      appStore.toastError('V3 导出失败: ' + err.message);
+    }
+  }
+
   function downloadBlob(blob, filename) {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -436,7 +456,7 @@ export const useCardStore = defineStore('card', () => {
   return {
     card, isDirty, fileName, coverImageBase64,
     cardData, worldEntries, regexScripts, tavernScripts, cardName, stats,
-    newCard, loadFromJson, exportJson, exportPng, importFromFile, markDirty,
+    newCard, loadFromJson, exportJson, exportPng, exportPngV3, importFromFile, markDirty,
     addWorldEntry, removeWorldEntry, duplicateWorldEntry,
     addRegexScript, removeRegexScript, reorderRegexScript,
     addTavernScript, removeTavernScript,
