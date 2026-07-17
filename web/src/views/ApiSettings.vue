@@ -126,17 +126,83 @@
     </div>
 
     <button class="btn btn--secondary" @click="apiStore.addProvider()">+ 添加自定义服务商</button>
+
+    <!-- 图片生成模型 -->
+    <div class="page__header" style="margin-top:28px">
+      <h1 style="font-size:18px">图片生成模型</h1>
+      <p>配置图片生成服务（OpenAI 兼容 /v1/images/generations），用于角色卡封面图生成</p>
+    </div>
+
+    <div v-for="provider in imageStore.providers" :key="provider.id" class="card mb-md"
+      :class="{ 'provider-active': imageStore.activeProviderId === provider.id }">
+      <div class="card__header">
+        <div class="flex-row">
+          <label class="active-radio" :class="{ checked: imageStore.activeProviderId === provider.id }">
+            <input type="radio" name="active-image-provider"
+              :checked="imageStore.activeProviderId === provider.id"
+              :disabled="!provider.apiKey"
+              @change="imageStore.setActiveProvider(provider.id)">
+            <span>{{ imageStore.activeProviderId === provider.id ? '当前使用' : '设为当前' }}</span>
+          </label>
+          <h3>{{ provider.name }}</h3>
+          <span v-if="provider.apiKey" class="badge badge--success">已配置</span>
+          <span v-else class="badge badge--warning">未配置</span>
+        </div>
+        <div class="flex-row">
+          <button v-if="provider.id.startsWith('custom_')"
+            class="btn btn--danger btn--sm" @click="appStore.confirmAction('删除这个图片服务商？', () => imageStore.removeProvider(provider.id))">删除</button>
+        </div>
+      </div>
+      <div class="card__body">
+        <div class="grid-2">
+          <div class="form-group">
+            <label>Base URL</label>
+            <input class="input" v-model="provider.baseUrl" placeholder="/v1 或 https://api.openai.com/v1">
+          </div>
+          <div class="form-group">
+            <label>模型</label>
+            <input class="input" v-model="provider.model" placeholder="gpt-image-2 / dall-e-3 等">
+          </div>
+        </div>
+        <div class="grid-2">
+          <div class="form-group">
+            <label>API Key</label>
+            <div class="flex-row">
+              <input :type="showImgKeys[provider.id] ? 'text' : 'password'" class="input"
+                v-model="provider.apiKey" placeholder="输入 API Key">
+              <button class="btn btn--ghost btn--sm"
+                @click="showImgKeys[provider.id] = !showImgKeys[provider.id]">
+                {{ showImgKeys[provider.id] ? '隐藏' : '显示' }}
+              </button>
+            </div>
+          </div>
+          <div class="form-group">
+            <label>尺寸（3:4 竖图）</label>
+            <select class="select" v-model="provider.size">
+              <option value="1024x1536">1024×1536（推荐）</option>
+              <option value="768x1024">768×1024</option>
+            </select>
+          </div>
+        </div>
+        <button class="btn btn--secondary btn--sm" @click="testImageConnection(provider)">测试连接</button>
+      </div>
+    </div>
+
+    <button class="btn btn--secondary" @click="imageStore.addProvider()">+ 添加自定义图片服务商</button>
   </div>
 </template>
 
 <script setup>
 import { reactive, ref, computed, watch } from 'vue';
 import { useApiStore } from '../stores/api.js';
+import { useImageGenStore } from '../stores/image-gen.js';
 import { useAppStore } from '../stores/app.js';
 
 const apiStore = useApiStore();
+const imageStore = useImageGenStore();
 const appStore = useAppStore();
 const showKeys = reactive({});
+const showImgKeys = reactive({});
 const lastSavedAt = ref('');
 const modelLists = reactive({});
 const modelLoading = reactive({});
@@ -191,6 +257,22 @@ async function testConnection(provider) {
     ], { maxTokens: 20 });
     apiStore.setActiveProvider(origActive);
     appStore.toastSuccess(`${provider.name} 连接成功: ${result.slice(0, 30)}`);
+  } catch (e) {
+    appStore.toastError(`连接失败: ${e.message}`);
+  }
+}
+
+async function testImageConnection(provider) {
+  if (!provider.apiKey) {
+    appStore.toastWarning('请先填写 API Key');
+    return;
+  }
+  try {
+    const origActive = imageStore.activeProviderId;
+    imageStore.setActiveProvider(provider.id);
+    const dataUrl = await imageStore.generateImage('a simple test image, minimal, abstract');
+    imageStore.setActiveProvider(origActive);
+    appStore.toastSuccess(`${provider.name} 连接成功，已生成测试图`);
   } catch (e) {
     appStore.toastError(`连接失败: ${e.message}`);
   }
