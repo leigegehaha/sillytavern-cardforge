@@ -44,7 +44,7 @@ export async function readPngCardData(arrayBuffer) {
 /**
  * 将角色卡数据写入 PNG
  */
-export async function writePngCardData(imageBase64, cardJson) {
+export async function writePngCardData(imageBase64, cardJson, useV3 = false) {
   // base64 转 ArrayBuffer
   const base64Data = imageBase64.replace(/^data:image\/\w+;base64,/, '');
   const binaryString = atob(base64Data);
@@ -54,20 +54,21 @@ export async function writePngCardData(imageBase64, cardJson) {
   }
 
   const chunks = extractChunks(bytes);
+  const chunkKeyword = useV3 ? 'ccv3' : 'chara';
 
-  // 移除已有的 chara tEXt chunk
+  // 移除已有的 chara / ccv3 tEXt chunk
   const filtered = chunks.filter(c => {
     if (c.type !== 'tEXt') return true;
     const sepIdx = c.data.indexOf(0);
     if (sepIdx === -1) return true;
     const keyword = uint8ArrayToString(c.data.slice(0, sepIdx));
-    return keyword !== 'chara';
+    return keyword !== 'chara' && keyword !== 'ccv3';
   });
 
-  // 创建新的 chara tEXt chunk
+  // 创建新的 tEXt chunk
   const jsonStr = JSON.stringify(cardJson);
   const base64Value = btoa(unescape(encodeURIComponent(jsonStr)));
-  const keyword = stringToUint8Array('chara');
+  const keyword = stringToUint8Array(chunkKeyword);
   const value = stringToUint8Array(base64Value);
   const charaData = new Uint8Array(keyword.length + 1 + value.length);
   charaData.set(keyword, 0);
