@@ -173,6 +173,7 @@ const navGroups = [
     { path: '/statusbar', label: '前端状态栏' },
   ]},
   { id: 'tools', title: '工具', links: [
+    { path: '/image-gen', label: '图片生成' },
     { path: '/diagnostic', label: '角色卡诊断' },
     { path: '/sandbox', label: '状态栏沙盒' },
     { path: '/assistant', label: 'AI 助手' },
