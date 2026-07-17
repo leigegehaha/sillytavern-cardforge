@@ -1,6 +1,6 @@
 <template>
   <div class="app" :class="{ 'sidebar-open': sidebarOpen }">
-    <!-- 顶部站点栏（已登录显示：logo + 站名 + 导航 + 用户区） -->
+    <!-- 顶栏（已登录显示） -->
     <header class="site-header" v-if="auth.isLoggedIn">
       <div class="site-header__left">
         <button class="site-header__menu" @click="sidebarOpen = !sidebarOpen" aria-label="菜单">
@@ -30,9 +30,10 @@
       </div>
     </header>
 
-    <!-- 侧边栏（已登录显示） -->
+    <!-- 树状侧栏（已登录显示） -->
     <aside class="sidebar" v-if="auth.isLoggedIn" @click.self="sidebarOpen = false">
       <nav class="sidebar__nav">
+        <!-- 文件操作（固定顶部） -->
         <div class="sidebar__section">文件</div>
         <button class="sidebar__btn" @click="importCard">导入 PNG/JSON</button>
         <button class="sidebar__btn" @click="importFromWorldbook">以世界书生成卡</button>
@@ -40,32 +41,47 @@
         <button class="sidebar__btn" @click="exportJson">导出 JSON</button>
         <button class="sidebar__btn sidebar__btn--danger" @click="newCard">新建空卡</button>
 
-        <template v-for="section in navSections" :key="section.title">
-          <div class="sidebar__section">{{ section.title }}</div>
-          <template v-for="(link, idx) in section.links" :key="link.path || link.action || idx">
-            <router-link v-if="link.path"
-              :to="link.path" class="sidebar__link"
-              :class="{ active: $route.path === link.path }"
-              @click="sidebarOpen = false">
-              {{ link.label }}
-            </router-link>
-            <button v-else-if="link.action === 'errorLog'"
-              class="sidebar__link"
-              @click="showErrorLog = true; sidebarOpen = false">
-              {{ link.label }}
-            </button>
-          </template>
-        </template>
+        <!-- 可折叠分组 -->
+        <div v-for="group in navGroups" :key="group.id"
+          class="sidebar__group" :class="{ expanded: expandedGroups.has(group.id) }">
+          <div class="sidebar__group-title" @click="toggleGroup(group.id)">
+            <span class="sidebar__arrow"></span>
+            <span>{{ group.title }}</span>
+          </div>
+          <div class="sidebar__group-items">
+            <template v-for="(link, idx) in group.links" :key="link.path || link.action || idx">
+              <router-link v-if="link.path"
+                :to="link.path" class="sidebar__link"
+                :class="{ active: $route.path === link.path }"
+                @click="sidebarOpen = false">
+                {{ link.label }}
+              </router-link>
+              <button v-else-if="link.action === 'errorLog'"
+                class="sidebar__link"
+                @click="showErrorLog = true; sidebarOpen = false">
+                {{ link.label }}
+              </button>
+            </template>
+          </div>
+        </div>
+
+        <!-- 设置（固定底部） -->
+        <div class="sidebar__section">设置</div>
+        <router-link to="/api" class="sidebar__btn"
+          :class="{ active: $route.path === '/api' }"
+          @click="sidebarOpen = false">API 设置</router-link>
+        <button class="sidebar__btn"
+          @click="showErrorLog = true; sidebarOpen = false">错误日志</button>
       </nav>
       <div class="sidebar__footer">
         <span class="sidebar__card-name">{{ cardStore.cardName || '未加载' }}</span>
       </div>
     </aside>
 
-    <!-- 遮罩层（移动端点击关闭侧边栏） -->
+    <!-- 遮罩层 -->
     <div class="overlay" v-if="sidebarOpen && auth.isLoggedIn" @click="sidebarOpen = false"></div>
 
-    <!-- 主内容（未登录时全屏，用于登录页） -->
+    <!-- 主内容 -->
     <main class="main" :class="{ 'main--auth': !auth.isLoggedIn }">
       <router-view v-slot="{ Component }">
         <keep-alive :exclude="['Login']">
@@ -74,13 +90,13 @@
       </router-view>
     </main>
 
-    <!-- 全局浮动工具集（已登录 + 非 AI 助手 / 诊断页） -->
+    <!-- 全局浮动工具集 -->
     <FloatingTools v-if="auth.isLoggedIn && $route.path !== '/assistant' && $route.path !== '/diagnostic'" />
 
-    <!-- 错误日志弹窗（已登录） -->
+    <!-- 错误日志弹窗 -->
     <ErrorLogModal v-if="auth.isLoggedIn" :visible="showErrorLog" @close="showErrorLog = false" />
 
-    <!-- 自定义确认弹窗（已登录） -->
+    <!-- 自定义确认弹窗 -->
     <div v-if="auth.isLoggedIn && appStore.confirmVisible" class="cf-confirm-overlay" @click.self="appStore.confirmNo()">
       <div class="cf-confirm-dialog">
         <div class="cf-confirm-msg">{{ appStore.confirmMessage }}</div>
@@ -91,7 +107,7 @@
       </div>
     </div>
 
-    <!-- 多选项弹窗（已登录） -->
+    <!-- 多选项弹窗 -->
     <div v-if="auth.isLoggedIn && appStore.chooseVisible" class="cf-confirm-overlay" @click.self="appStore.chooseResolve(null)">
       <div class="cf-confirm-dialog">
         <div class="cf-confirm-msg">{{ appStore.chooseMessage }}</div>
@@ -105,7 +121,7 @@
       </div>
     </div>
 
-    <!-- Toast 提示 -->
+    <!-- Toast -->
     <div class="toast-container">
       <div v-for="t in appStore.toasts" :key="t.id"
         class="toast" :class="'toast--' + t.type">
@@ -116,8 +132,8 @@
 </template>
 
 <script setup>
-import { ref, onMounted, watch } from 'vue';
-import { useRouter } from 'vue-router';
+import { ref, reactive, onMounted, watch } from 'vue';
+import { useRouter, useRoute } from 'vue-router';
 import { useCardStore } from './stores/card.js';
 import { useAppStore } from './stores/app.js';
 import { useAuthStore } from './stores/auth.js';
@@ -126,6 +142,7 @@ import FloatingTools from './components/FloatingTools.vue';
 import { parseStWorldbookEntries } from './utils/st-worldbook-import.js';
 
 const router = useRouter();
+const route = useRoute();
 const cardStore = useCardStore();
 const appStore = useAppStore();
 const auth = useAuthStore();
@@ -133,8 +150,59 @@ const sidebarOpen = ref(false);
 const showErrorLog = ref(false);
 const viewCount = ref(null);
 
+// 树状菜单分组
+const navGroups = [
+  { id: 'character', title: '角色卡', links: [
+    { path: '/basic', label: '基本信息' },
+    { path: '/charsetting', label: '角色设定' },
+    { path: '/greeting', label: '开场白' },
+    { path: '/player', label: '玩家角色' },
+  ]},
+  { id: 'world', title: '世界与剧情', links: [
+    { path: '/worldbook', label: '世界书' },
+    { path: '/npc', label: 'NPC 生成器' },
+    { path: '/novel-extract', label: '小说转世界书' },
+    { path: '/dialogue', label: '对话样本' },
+    { path: '/extra', label: '额外需求' },
+  ]},
+  { id: 'advanced', title: '高级系统', links: [
+    { path: '/mvu', label: 'MVU 变量系统' },
+    { path: '/regex', label: '正则脚本' },
+    { path: '/script', label: '酒馆助手脚本' },
+    { path: '/ejs', label: 'EJS 模板' },
+    { path: '/statusbar', label: '前端状态栏' },
+  ]},
+  { id: 'tools', title: '工具', links: [
+    { path: '/diagnostic', label: '角色卡诊断' },
+    { path: '/sandbox', label: '状态栏沙盒' },
+    { path: '/assistant', label: 'AI 助手' },
+    { path: '/stats', label: '卡片统计' },
+  ]},
+];
+
+// 智能展开：当前路由所在组自动展开
+const expandedGroups = reactive(new Set());
+
+function autoExpandCurrent(path) {
+  for (const g of navGroups) {
+    if (g.links.some(l => l.path === path)) {
+      expandedGroups.add(g.id);
+    }
+  }
+}
+
+function toggleGroup(id) {
+  if (expandedGroups.has(id)) expandedGroups.delete(id);
+  else expandedGroups.add(id);
+}
+
+// 初始化 + 路由变化时自动展开当前组
+watch(() => route.path, (path) => {
+  autoExpandCurrent(path);
+}, { immediate: true });
+
 onMounted(() => {
-  // 页面浏览量统计（同源 PHP 计数器，POST 避免预取计数）
+  // 页面浏览量统计
   fetch('/counter.php', { method: 'POST' })
     .then(r => r.json())
     .then(data => { if (data && typeof data.count === 'number') viewCount.value = data.count; })
@@ -173,40 +241,6 @@ function logout() {
   appStore.toastInfo('已退出登录');
   router.push('/login');
 }
-
-const navSections = [
-  { title: '必填', links: [
-    { path: '/basic', label: '基本信息' },
-    { path: '/charsetting', label: '角色设定' },
-    { path: '/worldbook', label: '世界书' },
-    { path: '/greeting', label: '开场白' },
-  ]},
-  { title: '可选', links: [
-    { path: '/npc', label: 'NPC 生成器' },
-    { path: '/novel-extract', label: '小说转世界书' },
-    { path: '/player', label: '玩家角色' },
-    { path: '/dialogue', label: '对话样本' },
-    { path: '/extra', label: '额外需求' },
-  ]},
-  { title: '高级', links: [
-    { path: '/mvu', label: 'MVU 变量系统' },
-    { path: '/regex', label: '正则脚本' },
-    { path: '/script', label: '酒馆助手脚本' },
-    { path: '/ejs', label: 'EJS 模板' },
-    { path: '/statusbar', label: '前端状态栏' },
-  ]},
-  { title: '工具', links: [
-    { path: '/diagnostic', label: '角色卡诊断' },
-    { path: '/sandbox', label: '状态栏沙盒' },
-    { path: '/assistant', label: 'AI 助手' },
-    { path: '/stats', label: '卡片统计' },
-  ]},
-  { title: '设置', links: [
-    { path: '/api', label: 'API 设置' },
-    { action: 'errorLog', label: '错误日志' },
-  ]},
-];
-const navLinks = navSections.flatMap(s => s.links);
 
 async function importCard() {
   sidebarOpen.value = false;
