@@ -1,9 +1,11 @@
 import { defineStore } from 'pinia';
 import { ref, computed } from 'vue';
 import { useApiStore } from './api.js';
+import { useImageGenStore } from './image-gen.js';
 
 const STORAGE_KEY = 'cardforge_auth';
 const TAVERN_MODEL = 'deepseek-tavern-v2-pro';
+const TAVERN_IMAGE_MODEL = 'gpt-image-2';
 
 export const useAuthStore = defineStore('auth', () => {
   // user = { id, username, display_name, group, balance_usd }
@@ -34,6 +36,8 @@ export const useAuthStore = defineStore('auth', () => {
     persist();
     const apiStore = useApiStore();
     apiStore.applyTavernProvider(data.api);
+    const imageStore = useImageGenStore();
+    imageStore.applyTavernImageProvider({ key: data.api.key, model: TAVERN_IMAGE_MODEL });
   }
 
   async function login(username, password) {
@@ -99,6 +103,8 @@ export const useAuthStore = defineStore('auth', () => {
   function logout() {
     const apiStore = useApiStore();
     apiStore.removeTavernProvider();
+    const imageStore = useImageGenStore();
+    imageStore.removeTavernImageProvider();
     clear();
   }
 
@@ -116,6 +122,8 @@ export const useAuthStore = defineStore('auth', () => {
           key: data.apiKey,
           model: TAVERN_MODEL
         });
+        const imageStore = useImageGenStore();
+        imageStore.applyTavernImageProvider({ key: data.apiKey, model: TAVERN_IMAGE_MODEL });
       }
     } catch (e) {}
   }
