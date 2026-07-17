@@ -244,6 +244,69 @@ body::after {
 
 .site-header__refresh:hover { transform: rotate(180deg); }
 
+/* ===== 图片生成页 ===== */
+.imggen-current-cover {
+  width: 120px;
+  height: 160px;
+  border-radius: var(--cf-radius);
+  overflow: hidden;
+  flex-shrink: 0;
+  border: 1px solid var(--cf-border);
+  background: var(--cf-bg-input);
+}
+
+.imggen-current-cover img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.imggen-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 14px;
+}
+
+.imggen-item {
+  border: 2px solid var(--cf-border);
+  border-radius: var(--cf-radius);
+  overflow: hidden;
+  background: var(--cf-bg-input);
+  transition: all var(--cf-t);
+}
+
+.imggen-item:hover {
+  border-color: var(--cf-border-hover);
+}
+
+.imggen-item.selected {
+  border-color: var(--cf-accent);
+  box-shadow: 0 0 0 1px var(--cf-accent), 0 0 16px rgba(255, 215, 0, 0.2);
+}
+
+.imggen-item img {
+  width: 100%;
+  aspect-ratio: 3 / 4;
+  object-fit: cover;
+  display: block;
+  cursor: pointer;
+}
+
+.imggen-item__bar {
+  padding: 6px 8px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-top: 1px solid var(--cf-border);
+  background: var(--cf-bg-card-strong);
+}
+
+.imggen-item__time {
+  font-size: 10px;
+  color: var(--cf-text-dim);
+}
+
 .site-header__btn { flex-shrink: 0; }
 
 /* ===== 侧栏（树状） ===== */
