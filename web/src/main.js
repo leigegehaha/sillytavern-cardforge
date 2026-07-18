@@ -4,13 +4,15 @@ import { createRouter, createWebHashHistory } from 'vue-router';
 import App from './App.vue';
 import errorLogger from './utils/error-logger.js';
 import { useAuthStore } from './stores/auth.js';
+import { useBasicModeStore } from './stores/basic-mode.js';
 import './styles/global.css';
 
 errorLogger.install();
 
 const routes = [
-  { path: '/', redirect: '/basic' },
+  { path: '/', redirect: '/basic-mode' },
   { path: '/login', component: () => import('./views/Login.vue') },
+  { path: '/basic-mode', component: () => import('./views/BasicMode.vue') },
   // 必填
   { path: '/basic', component: () => import('./views/BasicInfo.vue') },
   { path: '/charsetting', component: () => import('./views/CharSetting.vue') },
@@ -55,6 +57,7 @@ app.use(createPinia());
 // 恢复登录态（同步，从 localStorage 读取并注入 apiStore）
 const auth = useAuthStore();
 auth.restore();
+const basicMode = useBasicModeStore();
 
 app.use(router);
 
@@ -64,7 +67,7 @@ router.beforeEach((to) => {
     return '/login';
   }
   if (auth.isLoggedIn && to.path === '/login') {
-    return '/';
+    return basicMode.mode === 'basic' ? '/basic-mode' : '/basic';
   }
 });
 
