@@ -18,6 +18,10 @@
       </nav>
       <div class="site-header__right">
         <span class="site-header__counter" v-if="viewCount !== null" title="页面浏览量">浏览 {{ viewCount }}</span>
+        <div class="mode-switch" v-if="auth.isLoggedIn">
+          <button :class="{ active: basicMode.mode === 'basic' }" @click="switchMode('basic')">基础</button>
+          <button :class="{ active: basicMode.mode === 'advanced' }" @click="switchMode('advanced')">高级</button>
+        </div>
         <span class="site-header__user" v-if="auth.user" :title="auth.user.username">{{ auth.user.display_name || auth.user.username }}</span>
         <span class="site-header__balance" v-if="auth.user" title="账户余额">
           ${{ (auth.user.balance_usd ?? 0).toFixed(2) }}
@@ -30,8 +34,8 @@
       </div>
     </header>
 
-    <!-- 树状侧栏（已登录显示） -->
-    <aside class="sidebar" v-if="auth.isLoggedIn" @click.self="sidebarOpen = false">
+    <!-- 树状侧栏（已登录 + 高级模式显示） -->
+    <aside class="sidebar" v-if="auth.isLoggedIn && basicMode.mode === 'advanced'" @click.self="sidebarOpen = false">
       <nav class="sidebar__nav">
         <!-- 文件操作（固定顶部） -->
         <div class="sidebar__section">文件</div>
@@ -79,10 +83,10 @@
     </aside>
 
     <!-- 遮罩层 -->
-    <div class="overlay" v-if="sidebarOpen && auth.isLoggedIn" @click="sidebarOpen = false"></div>
+    <div class="overlay" v-if="sidebarOpen && auth.isLoggedIn && basicMode.mode === 'advanced'" @click="sidebarOpen = false"></div>
 
     <!-- 主内容 -->
-    <main class="main" :class="{ 'main--auth': !auth.isLoggedIn }">
+    <main class="main" :class="{ 'main--auth': !auth.isLoggedIn, 'main--basic': auth.isLoggedIn && basicMode.mode === 'basic' }">
       <router-view v-slot="{ Component }">
         <keep-alive :exclude="['Login']">
           <component :is="Component" />
@@ -90,8 +94,8 @@
       </router-view>
     </main>
 
-    <!-- 全局浮动工具集 -->
-    <FloatingTools v-if="auth.isLoggedIn && $route.path !== '/assistant' && $route.path !== '/diagnostic'" />
+    <!-- 全局浮动工具集（高级模式） -->
+    <FloatingTools v-if="auth.isLoggedIn && basicMode.mode === 'advanced' && $route.path !== '/assistant' && $route.path !== '/diagnostic'" />
 
     <!-- 错误日志弹窗 -->
     <ErrorLogModal v-if="auth.isLoggedIn" :visible="showErrorLog" @close="showErrorLog = false" />
@@ -137,6 +141,7 @@ import { useRouter, useRoute } from 'vue-router';
 import { useCardStore } from './stores/card.js';
 import { useAppStore } from './stores/app.js';
 import { useAuthStore } from './stores/auth.js';
+import { useBasicModeStore } from './stores/basic-mode.js';
 import ErrorLogModal from './components/ErrorLogModal.vue';
 import FloatingTools from './components/FloatingTools.vue';
 import { parseStWorldbookEntries } from './utils/st-worldbook-import.js';
@@ -146,6 +151,7 @@ const route = useRoute();
 const cardStore = useCardStore();
 const appStore = useAppStore();
 const auth = useAuthStore();
+const basicMode = useBasicModeStore();
 const sidebarOpen = ref(false);
 const showErrorLog = ref(false);
 const viewCount = ref(null);
@@ -241,6 +247,16 @@ function logout() {
   sidebarOpen.value = false;
   appStore.toastInfo('已退出登录');
   router.push('/login');
+}
+
+function switchMode(m) {
+  basicMode.setMode(m);
+  sidebarOpen.value = false;
+  if (m === 'basic') {
+    router.push('/basic-mode');
+  } else {
+    router.push('/basic');
+  }
 }
 
 async function importCard() {
